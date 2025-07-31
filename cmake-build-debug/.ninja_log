@@ -1,0 +1,24 @@
+# ninja log v6
+4	88	1753965673307747544	CMakeFiles/Minecraft.dir/Context.cpp.o	e36f16cebb0dca80
+4	146	1753965673307317174	CMakeFiles/Minecraft.dir/glad/src/glad.c.o	7b7a168137a6ed0
+4	451	1753965673307481464	CMakeFiles/Minecraft.dir/vendor/stb_image/stb_image.cpp.o	193711730c77600d
+4	729	1753965673307865959	CMakeFiles/Minecraft.dir/Util/Random.cpp.o	d08623bc37629f99
+147	790	1753965673450441939	CMakeFiles/Minecraft.dir/Textures/BasicTexture.cpp.o	d04282ef9a05f2d1
+4	898	1753965673307620087	CMakeFiles/Minecraft.dir/Game.cpp.o	b23707038ed18295
+3	1010	1753965673306831472	CMakeFiles/Minecraft.dir/Main.cpp.o	208ffe817d6d1ed3
+88	1031	1753965673391402380	CMakeFiles/Minecraft.dir/Shaders/Shader.cpp.o	be9cdc117fcd2e95
+452	1287	1753965673755942730	CMakeFiles/Minecraft.dir/Camera.cpp.o	a1a839847b1885a2
+791	1303	1753965674094213238	CMakeFiles/Minecraft.dir/World/Block/BlockTypes/BlockType.cpp.o	dbb6e2a14c22db7d
+1031	1421	1753965674334432507	CMakeFiles/Minecraft.dir/Textures/CubeTexture.cpp.o	9808051013a01e6a
+731	1482	1753965674034040777	CMakeFiles/Minecraft.dir/Renderer/CubeRenderer.cpp.o	169556fc3ac90f32
+1011	1711	1753965674314222299	CMakeFiles/Minecraft.dir/Renderer/RenderMaster.cpp.o	3f0a9ed6b65d886
+1303	1726	1753965674606782792	CMakeFiles/Minecraft.dir/Textures/TextureAtlas.cpp.o	29a9437e779fa58e
+1288	1758	1753965674591051363	CMakeFiles/Minecraft.dir/Shaders/BasicShader.cpp.o	9f4d570503445182
+899	1769	1753965674202275022	CMakeFiles/Minecraft.dir/World/Block/BlockData.cpp.o	a0f8574a728d4551
+1422	1847	1753965674725159989	CMakeFiles/Minecraft.dir/World/Block/ChunkBlock.cpp.o	518a0bc4d071c17c
+1482	1953	1753965674785746112	CMakeFiles/Minecraft.dir/ResourceManager.cpp.o	a05673ce6fc00b5c
+1727	2186	1753965675030268327	CMakeFiles/Minecraft.dir/Model.cpp.o	3bf5080daab74aed
+1711	2187	1753965675014838143	CMakeFiles/Minecraft.dir/World/Block/BlockDataBase.cpp.o	e7af2f25d8bb9aec
+1769	2203	1753965675072295013	CMakeFiles/Minecraft.dir/Shaders/ChunkShader.cpp.o	e0afb61e5e7d851d
+1758	2280	1753965675061119902	CMakeFiles/Minecraft.dir/Renderer/ChunkRenderer.cpp.o	14aeb6ce47992908
+2280	2323	1753965675583710456	Minecraft	a8f4722cdb49da89

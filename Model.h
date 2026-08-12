@@ -27,8 +27,9 @@ public:
     void AddEBO(const std::vector<GLuint> &indices);
     void AddVBO(int dimensions, const std::vector<GLfloat> &data);
     void BindVAO() const;
+    void UnbindVAO() const;
 
-    int GetIndicesCount() const;
+    unsigned int GetIndicesCount() const;
 
     const RenderInfo &GetRenderInfo() const;
 

@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(glad/include)
 include_directories(vendor)
 
-include_directories(/opt/homebrew/Cellar/glfw/3.4/include)
-link_directories(/opt/homebrew/Cellar/glfw/3.4/lib)
+include_directories(/opt/homebrew/Cellar/sfml/2.6.1/include)
+link_directories(/opt/homebrew/Cellar/sfml/2.6.1/lib)
 
 add_executable(Minecraft
         Main.cpp
@@ -49,6 +49,8 @@ add_executable(Minecraft
         Textures/TextureAtlas.h
         World/Block/ChunkBlock.cpp
         World/Block/ChunkBlock.h
+        World/Chunk/Chunk.h
+        World/Chunk/Chunk.cpp
         ResourceManager.cpp
         ResourceManager.h
         World/Block/BlockDataBase.cpp
@@ -60,8 +62,32 @@ add_executable(Minecraft
         Renderer/ChunkRenderer.h
         Shaders/ChunkShader.cpp
         Shaders/ChunkShader.h
+        World/Chunk/IChunk.h
+        World/Chunk/ChunkMesh.cpp
+        World/Chunk/ChunkMesh.h
+        Util/Frustum.h
+        Physics/AABB.h
+        World/TerrainGenerator.h
+        World/TerrainGenerator.cpp
+        World/World.h
+        World/World.cpp
 )
 
+find_package(Threads REQUIRED)
+
 target_link_libraries(Minecraft
-        glfw
+        sfml-system sfml-window sfml-graphics sfml-network
+        Threads::Threads
+)
+
+if (APPLE)
+    target_link_libraries(Minecraft "-framework OpenGL")
+    target_link_libraries(Minecraft "-framework GLUT")
+endif ()
+
+add_custom_command(TARGET Minecraft POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/resources
+    ${CMAKE_CURRENT_BINARY_DIR}/resources
+    COMMENT "Copying resources to build directory"
 )

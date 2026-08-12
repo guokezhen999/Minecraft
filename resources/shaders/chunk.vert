@@ -12,5 +12,6 @@ uniform mat4 projectionView;
 void main()
 {
     gl_Position = projectionView * vec4(aPos, 1.0);
+    TexCoords = aTexCoords;
     CardinalLight = aCardinalLight;
 }

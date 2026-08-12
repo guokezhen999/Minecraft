@@ -2,138 +2,182 @@
 
 #include "Game.h"
 
-void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void mouse_callback(GLFWwindow *window, double xpos, double ypos);
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
+static sf::Vector2i windowCenter(const sf::RenderWindow& window)
+{
+    const sf::Vector2u size = window.getSize();
+    return {static_cast<int>(size.x / 2), static_cast<int>(size.y / 2)};
+}
 
-// camera
-Config config;
-Camera camera(config);
-float lastX = static_cast<float>(config.windowX / 2.0);
-float lastY = static_cast<float>(config.windowY / 2.0);
-bool firstMouse = true;
-
-// timing
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
-
-// 初始化
-Game game(config, camera);
+static void setMouseCaptured(sf::RenderWindow& window, bool captured,
+                             bool& wrapNextMouseMove,
+                             float& lastMouseX, float& lastMouseY)
+{
+    window.setMouseCursorVisible(!captured);
+    window.setMouseCursorGrabbed(captured);
+    if (captured)
+    {
+        const sf::Vector2i center = windowCenter(window);
+        sf::Mouse::setPosition(center, window);
+        lastMouseX = static_cast<float>(center.x);
+        lastMouseY = static_cast<float>(center.y);
+        // Drop the synthetic MouseMoved caused by setPosition
+        wrapNextMouseMove = true;
+    }
+}
 
 int main()
 {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    Config config;
+    Camera camera(config);
+    Game game(config, camera);
 
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
+    float deltaTime = 0.0f;
+    sf::Clock deltaClock;
 
-    // glfw window creation
-    // --------------------
-    GLFWwindow *window;
-    window = glfwCreateWindow(config.windowX, config.windowY, "Minecraft", NULL, NULL);
+    sf::ContextSettings settings;
+    settings.majorVersion = 3;
+    settings.minorVersion = 3;
+    settings.depthBits = 24;
+    settings.attributeFlags = sf::ContextSettings::Core;
 
-    if (window == NULL)
+    sf::RenderWindow window(sf::VideoMode(config.windowX, config.windowY), "Minecraft", sf::Style::Default, settings);
+
+    if (!window.isOpen())
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
+        std::cout << "Failed to create SFML window" << std::endl;
         return -1;
     }
 
-    glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-    // tell GLFW to capture our mouse//
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(sf::Context::getFunction)))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
 
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS); // always pass the depth test (same effect as glDisable(GL_DEPTH_TEST))
+    glDepthFunc(GL_LESS);
+
+    window.setFramerateLimit(60);
+
+    sf::Vector2u windowSize = window.getSize();
+    glViewport(0, 0, windowSize.x, windowSize.y);
+    camera.UpdateAspectRatio(windowSize.x, windowSize.y);
+
+    bool mouseCaptured = true;
+    bool wrapNextMouseMove = false;
+    float lastMouseX = 0.0f;
+    float lastMouseY = 0.0f;
+    setMouseCaptured(window, true, wrapNextMouseMove, lastMouseX, lastMouseY);
 
     game.Init();
 
-    while(!glfwWindowShouldClose(window))
+    while (window.isOpen())
     {
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
+        deltaTime = deltaClock.restart().asSeconds();
 
-        // input
-        // -----
+        sf::Event event;
+        while (window.pollEvent(event))
+        {
+            if (event.type == sf::Event::Closed)
+            {
+                window.close();
+            }
+            else if (event.type == sf::Event::Resized)
+            {
+                glViewport(0, 0, event.size.width, event.size.height);
+                camera.UpdateAspectRatio(event.size.width, event.size.height);
+            }
+            else if (event.type == sf::Event::LostFocus)
+            {
+                mouseCaptured = false;
+                setMouseCaptured(window, false, wrapNextMouseMove, lastMouseX, lastMouseY);
+            }
+            else if (event.type == sf::Event::KeyPressed)
+            {
+                if (event.key.code == sf::Keyboard::Escape)
+                {
+                    if (mouseCaptured)
+                    {
+                        mouseCaptured = false;
+                        setMouseCaptured(window, false, wrapNextMouseMove, lastMouseX, lastMouseY);
+                    }
+                    else
+                    {
+                        window.close();
+                    }
+                }
+                game.Keys[event.key.code] = true;
+            }
+            else if (event.type == sf::Event::KeyReleased)
+            {
+                game.Keys[event.key.code] = false;
+            }
+            else if (event.type == sf::Event::MouseButtonPressed)
+            {
+                if (!mouseCaptured && window.hasFocus())
+                {
+                    mouseCaptured = true;
+                    setMouseCaptured(window, true, wrapNextMouseMove, lastMouseX, lastMouseY);
+                }
+            }
+            else if (event.type == sf::Event::MouseMoved)
+            {
+                if (!mouseCaptured)
+                    continue;
+
+                const float xpos = static_cast<float>(event.mouseMove.x);
+                const float ypos = static_cast<float>(event.mouseMove.y);
+
+                // Ignore the event generated by our own setPosition warp
+                if (wrapNextMouseMove)
+                {
+                    wrapNextMouseMove = false;
+                    lastMouseX = xpos;
+                    lastMouseY = ypos;
+                    continue;
+                }
+
+                const float xoffset = xpos - lastMouseX;
+                const float yoffset = lastMouseY - ypos;
+                lastMouseX = xpos;
+                lastMouseY = ypos;
+
+                if (xoffset != 0.0f || yoffset != 0.0f)
+                    camera.ProcessMouseMovement(xoffset, yoffset);
+
+                // Only recenter when near the window edge (avoids per-frame 1px Retina drift)
+                const sf::Vector2u size = window.getSize();
+                constexpr int margin = 64;
+                if (event.mouseMove.x < margin ||
+                    event.mouseMove.y < margin ||
+                    event.mouseMove.x > static_cast<int>(size.x) - margin ||
+                    event.mouseMove.y > static_cast<int>(size.y) - margin)
+                {
+                    const sf::Vector2i center = windowCenter(window);
+                    sf::Mouse::setPosition(center, window);
+                    lastMouseX = static_cast<float>(center.x);
+                    lastMouseY = static_cast<float>(center.y);
+                    wrapNextMouseMove = true;
+                }
+            }
+            else if (event.type == sf::Event::MouseWheelScrolled)
+            {
+                if (event.mouseWheelScroll.wheel == sf::Mouse::VerticalWheel)
+                {
+                    camera.ProcessMouseScroll(static_cast<float>(event.mouseWheelScroll.delta));
+                }
+            }
+        }
+
         game.ProcessInput(deltaTime);
+        game.Update();
 
-        // render
-        // ------
         glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         game.Render();
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        window.display();
     }
-    glfwTerminate();
-
-}
-
-void framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-}
-
-void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
-{
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-
-    lastX = xpos;
-    lastY = ypos;
-
-    camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
-{
-    camera.ProcessMouseScroll(static_cast<float>(yoffset));
-    std::cout << yoffset << std::endl;
-}
-
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    {
-        std::cout << "Escape" << std::endl;
-        glfwSetWindowShouldClose(window, true);
-
-    }
-    if (key >= 0 && key < 1024)
-    {
-        if (action == GLFW_PRESS)
-            game.Keys[key] = true;
-        else if (action == GLFW_RELEASE)
-            game.Keys[key] = false;
-    }
+    return 0;
 }

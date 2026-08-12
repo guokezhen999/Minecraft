@@ -8,29 +8,29 @@
 #include "BlockId.h"
 #include "../Util/NonCopyable.h"
 
-#include <GLFW/glfw3.h>
+#include <SFML/Graphics.hpp>
 #include <glm/glm.hpp>
 #include <string>
 
 enum class BlockMeshType
 {
-    Cube,
-    X
+    Cube = 0,
+    X = 1
 };
 
 enum class BlockShaderType
 {
-    Chunk,
-    Liquid,
-    Flora
+    Chunk = 0,
+    Liquid = 1,
+    Flora = 2
 };
 
 struct BlockDataHolder : public NonCopyable
 {
     BlockId id;
-    glm::ivec2 texTopCoords;
-    glm::ivec2 texSideCoords;
-    glm::ivec2 texBottomCoords;
+    sf::Vector2i texTopCoords;
+    sf::Vector2i texSideCoords;
+    sf::Vector2i texBottomCoords;
 
     BlockMeshType meshType;
     BlockShaderType shaderType;

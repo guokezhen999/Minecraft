@@ -16,8 +16,8 @@
 class ResourceManager
 {
 public:
-    static BasicShader BlockShader;
-    static BasicTexture BlockTexture;
+    static BasicShader* BlockShader;
+    static BasicTexture* BlockTexture;
 
     static BasicTexture LoadTextureFromFile(const GLchar *file);
 

@@ -6,21 +6,31 @@
 #define MINECRAFT_CHUNKRENDERER_H
 
 #include <vector>
+#include <utility>
 
 #include "../Shaders/ChunkShader.h"
 
-struct RenderInfo;
+class Model;
 class ChunkMesh;
 class Camera;
 
 class ChunkRenderer
 {
 public:
-    void Add(const ChunkMesh &mesh);
+    void AddSolid(const ChunkMesh &mesh);
+    void AddTransparent(const ChunkMesh &mesh, float distSq);
+
+    // Opaque pass, then back-to-front transparent pass
     void Render(const Camera &camera);
 
 private:
-    std::vector<const RenderInfo *> m_chunks;
+    struct TransparentDraw {
+        const Model *model;
+        float distSq;
+    };
+
+    std::vector<const Model *> m_solid;
+    std::vector<TransparentDraw> m_transparent;
 
     ChunkShader m_shader;
 };

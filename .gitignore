@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-.idea
-=======
 # macOS
 .DS_Store
 .AppleDouble
@@ -43,4 +40,3 @@ Minecraft
 *.log
 *.tmp
 *.bak
->>>>>>> sfml

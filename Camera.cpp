@@ -3,10 +3,11 @@
 //
 
 #include "Camera.h"
-#include <iostream>
+#include <cmath>
 
 Camera::Camera(const Config &config, glm::vec3 position, glm::vec3 up, float yaw, float pitch)
-: m_config(config), Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM)
+: m_config(config), Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY),
+  Zoom(static_cast<float>(config.fov))
 {
     m_projectionMatrix = makeProjectionMatrix(config);
     Position = position;
@@ -14,6 +15,7 @@ Camera::Camera(const Config &config, glm::vec3 position, glm::vec3 up, float yaw
     Yaw = yaw;
     Pitch = pitch;
     updateCameraVectors();
+    updateMatrices();
 }
 
 const glm::mat4& Camera::GetViewMatrix() const
@@ -49,35 +51,25 @@ void Camera::ProcessKeyboard(Camera_Movement direction, float deltaTime)
     updateMatrices();
 }
 
-void Camera::ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch)
+void Camera::ProcessMouseMovement(float xoffset, float yoffset)
 {
     xoffset *= MouseSensitivity;
     yoffset *= MouseSensitivity;
 
-    Yaw   += xoffset;
-    Pitch += yoffset;
+    Yaw += xoffset;
+    Pitch = glm::clamp(Pitch + yoffset, -PITCH_LIMIT, PITCH_LIMIT);
 
-    // make sure that when pitch is out of bounds, screen doesn't get flipped
-    if (constrainPitch)
-    {
-        if (Pitch > 89.0f)
-            Pitch = 89.0f;
-        if (Pitch < -89.0f)
-            Pitch = -89.0f;
-    }
-
-    // update Front, Right and Up Vectors using the updated Euler angles
     updateCameraVectors();
     updateMatrices();
 }
 
 void Camera::ProcessMouseScroll(float yoffset)
 {
-    Zoom -= (float)yoffset;
-    if (Zoom < 0.5f)
-        Zoom = 0.5f;
-    if (Zoom > 45.0f)
-        Zoom = 45.0f;
+    Zoom -= (float)yoffset * 2.0f;
+    if (Zoom < 30.0f)
+        Zoom = 30.0f;
+    if (Zoom > 110.0f)
+        Zoom = 110.0f;
     updateMatrices();
 }
 
@@ -105,14 +97,16 @@ void Camera::updateMatrices()
 
 void Camera::updateCameraVectors()
 {
+    const float yawR = glm::radians(Yaw);
+    const float pitchR = glm::radians(Pitch);
+
     glm::vec3 front;
-    front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
-    front.y = sin(glm::radians(Pitch));
-    front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+    front.x = std::cos(yawR) * std::cos(pitchR);
+    front.y = std::sin(pitchR);
+    front.z = std::sin(yawR) * std::cos(pitchR);
     Front = glm::normalize(front);
-    // also re-calculate the Right and Up vector
-    Right = glm::normalize(glm::cross(Front, WorldUp));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-    Up    = glm::normalize(glm::cross(Right, Front));
+    Right = glm::normalize(glm::cross(Front, WorldUp));
+    Up = glm::normalize(glm::cross(Right, Front));
 }
 
 glm::mat4 Camera::makeProjectionMatrix(const Config &config)

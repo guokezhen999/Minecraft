@@ -20,4 +20,7 @@ constexpr int MAX_MESH_UPLOADS_PER_FRAME = 8;
 // LOD: skip flora beyond this world distance (blocks)
 constexpr float FLORA_LOD_DISTANCE = static_cast<float>(RENDER_DISTANCE * CHUNK_SIZE) * 0.55f;
 
+// Block interaction
+constexpr float RAYCAST_REACH = 6.0f;
+
 #endif //MINECRAFT_WORLDCONSTANTS_H

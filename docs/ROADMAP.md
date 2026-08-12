@@ -1,6 +1,6 @@
 # Minecraft 克隆 — 开发规划
 
-> 当前进度：**可漫游的程序化世界**（Chunk + Mesh + 多生物群系地形）。  
+> 当前进度：**可站立行走的体素世界**（重力 / 碰撞 / 跳跃 / 飞行切换）。  
 > 目标：从「风景浏览器」推进到「可玩的体素沙盒原型」。
 
 ---
@@ -14,13 +14,12 @@
 - Chunk（16³）+ 面剔除 Mesh（solid / water / flora）
 - World：按相机加载视野 Chunk、距离裁剪渲染
 - 种子噪声地形：海洋 / 草原 / 沙漠 / 山地 + 树木与装饰
-- `AABB` 结构已存在，尚未接入玩法
 - **阶段 0 修债** + **渲染优化**：视锥剔除、异步生成/建网、透明排序、flora LOD、批量绘制
+- **阶段 1 方块交互**：`getBlock` / `setBlock`、Raycast、左键挖 / 右键放、选中框
+- **阶段 2 玩家物理**：AABB 碰撞、重力、跳跃、潜行、飞行开关、相机绑眼睛高度
 
 ### 主要缺口
 
-- 无破坏 / 放置、无射线检测
-- 无重力 / 碰撞（纯飞行相机）
 - 仅一层 16 高 Chunk（阶段 3 再做垂直 Section）
 - 无背包 / HUD / 存档 / 真实光照
 - 尚未做真正的 mesh 合并（多 Chunk 合成单 VBO）；当前是按 solid/transparent 分批减少状态切换
@@ -31,10 +30,10 @@
 |------|------|------|
 | 1 | 画单个立方体 / 纹理 | 完成 |
 | 2 | Chunk mesh + 面剔除 | 完成 |
-| 3 | 无限世界 + 程序化地形 | **当前** |
-| 4 | 破坏 / 放置方块 | 未开始 |
-| 5 | 碰撞 / 重力 / 第一人称玩家 | 未开始 |
-| 6 | 光照、生物、UI、存档… | 未开始 |
+| 3 | 无限世界 + 程序化地形 | 完成 |
+| 4 | 破坏 / 放置方块 | 完成 |
+| 5 | 碰撞 / 重力 / 第一人称玩家 | **完成（见下方阶段 2）** |
+| 6 | 光照、生物、UI、存档… | **当前** |
 
 ---
 
@@ -55,33 +54,33 @@
 
 ---
 
-## 阶段 1：方块交互
+## 阶段 1：方块交互 ✅
 
 目标：能挖、能放，世界真正可修改。
 
-1. **世界坐标读写 API**  
-   `World::getBlock` / `setBlock(worldX, Y, Z)`，内部换算到 Chunk。
-2. **射线检测（Raycast）**  
-   从相机向前步进，命中方块面；记录目标块与相邻空位（用于放置）。
-3. **破坏 / 放置**  
-   左键挖、右键放；`setBlock` 后重建该 Chunk mesh，必要时重建邻居。
-4. **选中框**  
-   复用 `CubeRenderer` / wireframe 绘制准星目标。
+1. **世界坐标读写 API** ✅  
+   `World::getBlock` / `setBlock(worldX, Y, Z)`，内部换算到 Chunk；改块后同步 remesh 本 Chunk 与边界邻居。
+2. **射线检测（Raycast）** ✅  
+   `Physics/RayCast`：Amanatides & Woo 体素遍历；命中固体/树叶/花草，穿过空气与水；记录 `blockPos`（挖）与 `previousPos`（放）。
+3. **破坏 / 放置** ✅  
+   左键挖、右键放（默认石块；`1–4` 切换石/土/草/沙）；`setBlock` 后立即重建 mesh。
+4. **选中框** ✅  
+   `OutlineRenderer` 线框绘制准星目标方块。
 
 ---
 
-## 阶段 2：玩家物理
+## 阶段 2：玩家物理 ✅
 
 目标：从飞行相机变成站在地上的人。
 
-1. **完善 `AABB`**  
-   位置、尺寸、移动后的碰撞检测。
-2. **方块碰撞**  
-   按玩家包围盒扫周围方块（分离轴或逐轴扫掠）。
-3. **重力 + 跳跃**  
-   落地、跳跃、蹲下；保留飞行模式开关便于调试。
-4. **相机绑定玩家**  
-   第一人称 eye height；现有鼠标锁定可复用。
+1. **完善 `AABB`** ✅  
+   `Physics/AABB.h`：min/max、与方块相交检测。
+2. **方块碰撞** ✅  
+   `Player` 逐轴移动并解析；`World::isCollidable`（未加载 Chunk 视为实心，避免掉虚空）。
+3. **重力 + 跳跃** ✅  
+   落地、空格跳跃、Shift 潜行；`V` 切换飞行（Space/`R` 上升，Shift/`F` 下降）。
+4. **相机绑定玩家** ✅  
+   眼睛高度跟随站立 / 潜行；鼠标锁定仍用于视角。
 
 ---
 
@@ -149,11 +148,11 @@
 
 ### 近期可执行清单（约两周）
 
-1. 修水面与高度逻辑  
-2. Chunk 卸载  
-3. `getBlock` / `setBlock`  
-4. Raycast + 挖放 + mesh 更新  
-5. AABB + 重力  
+1. 修水面与高度逻辑 ✅  
+2. Chunk 卸载 ✅  
+3. `getBlock` / `setBlock` ✅  
+4. Raycast + 挖放 + mesh 更新 ✅  
+5. AABB + 重力 ✅  
 
 完成以上 5 步后，项目即从「风景浏览器」进入「可玩体素沙盒原型」。
 
@@ -164,9 +163,12 @@
 | 模块 | 路径 |
 |------|------|
 | 游戏主循环 | `Game.cpp` / `Main.cpp` |
+| 玩家物理 | `Physics/Player.cpp` |
 | 世界 / Chunk 管理 | `World/World.cpp` |
 | 地形生成 | `World/TerrainGenerator.cpp` |
 | Chunk / Mesh | `World/Chunk/` |
+| 射线检测 | `Physics/RayCast.cpp` |
+| 选中框 | `Renderer/OutlineRenderer.cpp` |
 | 渲染调度 | `Renderer/RenderMaster.cpp` |
-| 碰撞占位 | `Physics/AABB.h` |
+| 碰撞盒 | `Physics/AABB.h` |
 | 世界常量 | `World/WorldConstants.h` |

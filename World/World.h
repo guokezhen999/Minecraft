@@ -45,6 +45,13 @@ public:
     // Caller must already hold a shared/unique lock on the chunk map
     ChunkBlock getBlockLocked(int worldX, int worldY, int worldZ) const;
 
+    // Edit world block and remesh affected chunks (main / GL thread).
+    // Returns false if Y out of range or the chunk is not loaded.
+    bool setBlock(int worldX, int worldY, int worldZ, ChunkBlock block);
+
+    // Collision: unloaded chunks and y < 0 count as solid (no void fall-through).
+    bool isCollidable(int worldX, int worldY, int worldZ) const;
+
     bool isChunkLoaded(int cx, int cz) const;
 
 private:

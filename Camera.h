@@ -25,7 +25,7 @@ const float YAW         = -90.0f;
 const float PITCH       =  0.0f;
 const float SPEED       =  2.5f;
 const float SENSITIVITY =  0.1f;
-const float ZOOM        =  45.0f;
+const float PITCH_LIMIT = 89.0f; // Head-like up/down; yaw has no limit
 
 class Camera
 {
@@ -50,7 +50,7 @@ public:
     const glm::mat4& GetProjectionViewMatrix() const;
 
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
-    void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
+    void ProcessMouseMovement(float xoffset, float yoffset);
     void ProcessMouseScroll(float yoffset);
     void UpdateAspectRatio(int width, int height);
     void SetPosition(const glm::vec3& position);

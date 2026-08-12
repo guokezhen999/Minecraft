@@ -6,6 +6,7 @@
 #include "../Renderer/RenderMaster.h"
 #include "../Camera.h"
 #include "../Util/Frustum.h"
+#include "Block/BlockData.h"
 
 #include <cmath>
 #include <algorithm>
@@ -53,6 +54,88 @@ ChunkBlock World::getBlockLocked(int worldX, int worldY, int worldZ) const {
 bool World::isChunkLoaded(int cx, int cz) const {
     std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
     return m_chunks.count(chunkKey(cx, cz)) > 0;
+}
+
+bool World::isCollidable(int worldX, int worldY, int worldZ) const {
+    if (worldY < 0)
+        return true;
+    if (worldY >= CHUNK_SIZE)
+        return false;
+
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+
+    std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+    if (m_chunks.find(chunkKey(cx, cz)) == m_chunks.end())
+        return true; // Unloaded: treat as solid so the player does not fall through
+
+    return getBlockLocked(worldX, worldY, worldZ).GetData().isCollidable;
+}
+
+bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
+    if (worldY < 0 || worldY >= CHUNK_SIZE)
+        return false;
+
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+
+    std::vector<std::pair<int, int>> toRemesh;
+    toRemesh.reserve(5);
+
+    {
+        std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
+        auto it = m_chunks.find(chunkKey(cx, cz));
+        if (it == m_chunks.end())
+            return false;
+
+        if (it->second->getBlock(lx, worldY, lz) == block)
+            return false;
+
+        it->second->setBlock(lx, worldY, lz, block);
+
+        toRemesh.emplace_back(cx, cz);
+        if (lx == 0)
+            toRemesh.emplace_back(cx - 1, cz);
+        if (lx == CHUNK_SIZE - 1)
+            toRemesh.emplace_back(cx + 1, cz);
+        if (lz == 0)
+            toRemesh.emplace_back(cx, cz - 1);
+        if (lz == CHUNK_SIZE - 1)
+            toRemesh.emplace_back(cx, cz + 1);
+
+        // Sync remesh so dig/place is visible immediately
+        for (auto [rcx, rcz] : toRemesh) {
+            auto rit = m_chunks.find(chunkKey(rcx, rcz));
+            if (rit == m_chunks.end())
+                continue;
+            rit->second->buildMesh(*this);
+        }
+    }
+
+    // Drop any pending async remesh for these chunks (we already rebuilt)
+    {
+        std::lock_guard<std::mutex> qlock(m_queueMutex);
+        for (auto [rcx, rcz] : toRemesh) {
+            const uint64_t key = chunkKey(rcx, rcz);
+            m_meshQueued.erase(key);
+            for (auto qit = m_meshQueue.begin(); qit != m_meshQueue.end(); ) {
+                if (qit->cx == rcx && qit->cz == rcz)
+                    qit = m_meshQueue.erase(qit);
+                else
+                    ++qit;
+            }
+        }
+    }
+
+    std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+    for (auto [rcx, rcz] : toRemesh) {
+        auto rit = m_chunks.find(chunkKey(rcx, rcz));
+        if (rit != m_chunks.end() && rit->second->hasPendingUpload())
+            rit->second->bufferMeshes();
+    }
+    return true;
 }
 
 void World::setWorldBlock(Chunk& chunk, int cx, int cz,

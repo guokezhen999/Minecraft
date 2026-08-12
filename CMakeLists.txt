@@ -9,6 +9,8 @@ include_directories(vendor)
 include_directories(/opt/homebrew/Cellar/sfml/2.6.1/include)
 link_directories(/opt/homebrew/Cellar/sfml/2.6.1/lib)
 
+find_package(glfw3 3.3 REQUIRED)
+
 add_executable(Minecraft
         Main.cpp
         glad/src/glad.c
@@ -67,6 +69,14 @@ add_executable(Minecraft
         World/Chunk/ChunkMesh.h
         Util/Frustum.h
         Physics/AABB.h
+        Physics/RayCast.h
+        Physics/RayCast.cpp
+        Physics/Player.h
+        Physics/Player.cpp
+        Renderer/OutlineRenderer.h
+        Renderer/OutlineRenderer.cpp
+        Renderer/CrosshairRenderer.h
+        Renderer/CrosshairRenderer.cpp
         World/TerrainGenerator.h
         World/TerrainGenerator.cpp
         World/World.h
@@ -76,6 +86,7 @@ add_executable(Minecraft
 find_package(Threads REQUIRED)
 
 target_link_libraries(Minecraft
+        glfw
         sfml-system sfml-window sfml-graphics sfml-network
         Threads::Threads
 )

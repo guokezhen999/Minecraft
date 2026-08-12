@@ -86,7 +86,14 @@ glm::vec3 Game::horizontalLookDir() const
 
 void Game::updateTargetBlock()
 {
-    m_target = raycastWorld(*m_World, m_Camera->Position, m_Camera->Front, RAYCAST_REACH);
+    // Prefer solids through water so underwater dig/place can reach walls / floor.
+    // If nothing solid is in reach, allow targeting water (dig / cover).
+    m_target = raycastWorld(*m_World, m_Camera->Position, m_Camera->Front,
+                            RAYCAST_REACH, /*hitFluids=*/false);
+    if (!m_target.hit) {
+        m_target = raycastWorld(*m_World, m_Camera->Position, m_Camera->Front,
+                                RAYCAST_REACH, /*hitFluids=*/true);
+    }
 }
 
 void Game::OnLeftClick()

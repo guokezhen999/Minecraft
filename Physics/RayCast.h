@@ -17,10 +17,12 @@ struct RaycastHit {
 };
 
 // Cast from origin along direction (need not be normalized).
-// Skips air and liquids; stops on solids / leaves / flora.
+// Always skips air. When hitFluids is false, also skips water so aim
+// can reach solids underwater; when true, water is a valid target.
 RaycastHit raycastWorld(const World& world,
                         const glm::vec3& origin,
                         const glm::vec3& direction,
-                        float maxDistance);
+                        float maxDistance,
+                        bool hitFluids = false);
 
 #endif //MINECRAFT_RAYCAST_H

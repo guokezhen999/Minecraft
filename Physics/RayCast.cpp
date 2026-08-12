@@ -4,15 +4,17 @@
 
 #include "RayCast.h"
 #include "../World/World.h"
+#include "../World/Block/Water.h"
 
 #include <cmath>
 
 namespace {
 
-bool isRayTarget(ChunkBlock block) {
+bool isRayTarget(ChunkBlock block, bool hitFluids) {
     if (block == BlockId::Air)
         return false;
-    // Liquids are selectable so they can be dug / covered
+    if (Water::isWater(block))
+        return hitFluids;
     return true;
 }
 
@@ -25,7 +27,8 @@ int floorToInt(float v) {
 RaycastHit raycastWorld(const World& world,
                         const glm::vec3& origin,
                         const glm::vec3& direction,
-                        float maxDistance) {
+                        float maxDistance,
+                        bool hitFluids) {
     RaycastHit result;
 
     const float len = glm::length(direction);
@@ -62,12 +65,12 @@ RaycastHit raycastWorld(const World& world,
     glm::ivec3 prev{x, y, z};
     float t = 0.0f;
 
-    // If already inside a solid block, step out first without counting as hit
-    // (so flying camera inside terrain can still aim outward).
+    // If already inside a solid/fluid target, step out first without counting as hit
+    // (so camera inside terrain / water can still aim outward).
     const int maxSteps = static_cast<int>(maxDistance * 3.0f) + 3;
     for (int i = 0; i < maxSteps && t <= maxDistance; ++i) {
         ChunkBlock block = world.getBlock(x, y, z);
-        if (isRayTarget(block)) {
+        if (isRayTarget(block, hitFluids)) {
             // Ignore a hit at t≈0 (camera inside the block)
             if (t > 1e-4f) {
                 result.hit = true;

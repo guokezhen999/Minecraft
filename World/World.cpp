@@ -263,7 +263,9 @@ void World::updateFluidAt(int x, int y, int z,
         return Water::hasInfiniteSupportBelow(getBlockLocked(cx, cy - 1, cz), cy);
     };
 
-    // Minecraft-style: ≥2 horizontal sources + solid/source below → new source
+    // Minecraft-style: ≥2 horizontal sources + solid/source below → new source.
+    // Only upgrade existing flowing water — never spawn a source straight into
+    // air/plants (that made dug cells snap back to water in the same tick).
     auto tryFormInfiniteSource = [&](int cx, int cy, int cz) -> bool {
         if (!hasInfiniteSupport(cx, cy, cz))
             return false;
@@ -272,7 +274,7 @@ void World::updateFluidAt(int x, int y, int z,
         ChunkBlock here = getBlockLocked(cx, cy, cz);
         if (Water::isSource(here))
             return true;
-        if (!Water::canFlowInto(here) && !Water::isWater(here))
+        if (!Water::isWater(here))
             return false;
         setBlockDeferred(cx, cy, cz, Water::makeSource(), remeshCols, true);
         return true;

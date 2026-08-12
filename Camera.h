@@ -45,13 +45,15 @@ public:
     Camera(const Config &config, glm::vec3 position = glm::vec3(0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f),
            float yaw = YAW, float  pitch = PITCH);
 
-    glm::mat4& GetViewMatrix();
-    glm::mat4& GetProjectionMatrix();
-    glm::mat4& GetProjectionViewMatrix();
+    const glm::mat4& GetViewMatrix() const;
+    const glm::mat4& GetProjectionMatrix() const;
+    const glm::mat4& GetProjectionViewMatrix() const;
 
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
     void ProcessMouseScroll(float yoffset);
+    void UpdateAspectRatio(int width, int height);
+    void SetPosition(const glm::vec3& position);
 
 private:
     void updateCameraVectors();

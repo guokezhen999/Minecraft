@@ -26,6 +26,7 @@ public:
     DefaultBlock(const std::string &fileName)
     : BlockType(fileName)
     {
+
     }
 };
 

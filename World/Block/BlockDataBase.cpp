@@ -6,20 +6,22 @@
 
 BlockDatabase::BlockDatabase()
 {
-    m_blocks[(int)BlockId::Air] = std::make_unique<DefaultBlock>("Air");
-    m_blocks[(int)BlockId::Grass] = std::make_unique<DefaultBlock>("Grass");
-    m_blocks[(int)BlockId::Dirt] = std::make_unique<DefaultBlock>("Dirt");
-    m_blocks[(int)BlockId::Stone] = std::make_unique<DefaultBlock>("Stone");
-    m_blocks[(int)BlockId::OakBark] = std::make_unique<DefaultBlock>("OakBark");
-    m_blocks[(int)BlockId::OakLeaf] = std::make_unique<DefaultBlock>("OakLeaf");
-    m_blocks[(int)BlockId::Sand] = std::make_unique<DefaultBlock>("Sand");
-    m_blocks[(int)BlockId::Water] = std::make_unique<DefaultBlock>("Water");
-    m_blocks[(int)BlockId::Cactus] = std::make_unique<DefaultBlock>("Cactus");
+    m_blocks[(int)BlockId::Air] = std::make_unique<DefaultBlock>("air");
+    m_blocks[(int)BlockId::Grass] = std::make_unique<DefaultBlock>("grass");
+    m_blocks[(int)BlockId::Dirt] = std::make_unique<DefaultBlock>("dirt");
+    m_blocks[(int)BlockId::Stone] = std::make_unique<DefaultBlock>("stone");
+    m_blocks[(int)BlockId::OakBark] = std::make_unique<DefaultBlock>("oakBark");
+    m_blocks[(int)BlockId::OakLeaf] = std::make_unique<DefaultBlock>("oakLeaf");
+    m_blocks[(int)BlockId::Sand] = std::make_unique<DefaultBlock>("sand");
+    m_blocks[(int)BlockId::Water] = std::make_unique<DefaultBlock>("water");
+    m_blocks[(int)BlockId::Cactus] = std::make_unique<DefaultBlock>("cactus");
     m_blocks[(int)BlockId::TallGrass] =
-            std::make_unique<DefaultBlock>("TallGrass");
-    m_blocks[(int)BlockId::Rose] = std::make_unique<DefaultBlock>("Rose");
+            std::make_unique<DefaultBlock>("tallGrass");
+    m_blocks[(int)BlockId::Rose] = std::make_unique<DefaultBlock>("rose");
     m_blocks[(int)BlockId::DeadShrub] =
-            std::make_unique<DefaultBlock>("DeadShrub");
+            std::make_unique<DefaultBlock>("deadShrub");
+
+    TextureAtlas = ::TextureAtlas("/defaultPack");
 }
 
 BlockDatabase &BlockDatabase::Get()

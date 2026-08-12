@@ -14,6 +14,7 @@ BasicTexture::BasicTexture(const std::string& file)
 : Width(0), Height(0), ID(0)
 {
     glGenTextures(1, &this->ID);
+    LoadFromFile(file.c_str());
 }
 
 BasicTexture::~BasicTexture()
@@ -34,7 +35,7 @@ void BasicTexture::Generate(unsigned int width, unsigned int height, unsigned ch
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    stbi_image_free(data);
+    if (data) stbi_image_free(data);
     // Unbind Textures
     glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -47,8 +48,17 @@ void BasicTexture::Bind() const
 
 void BasicTexture::LoadFromFile(const char* file)
 {
+    stbi_set_flip_vertically_on_load(false);
     int width, height, nrChannels;
-    unsigned char *data = stbi_load(file, &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load(file, &width, &height, &nrChannels, STBI_rgb_alpha);
+    if (!data) {
+        std::cerr << "[BasicTexture] Failed to load: " << file
+                  << " -- " << stbi_failure_reason() << std::endl;
+        return;
+    }
+    std::cout << "[BasicTexture] Loaded: " << file
+              << "  " << width << "x" << height
+              << "  channels=" << nrChannels << std::endl;
     Generate(width, height, data);
 }
 

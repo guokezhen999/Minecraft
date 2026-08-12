@@ -7,6 +7,7 @@
 
 #include "CubeRenderer.h"
 #include "ChunkRenderer.h"
+#include "../World/Chunk/ChunkMesh.h"
 
 class ChunkSection;
 
@@ -17,11 +18,17 @@ public:
     bool m_DrawBox = false;
 
     void RenderBlocks(Camera &camera);
-    void DrawChunk(Camera &camera);
+
+    // Queue chunk meshes; flora optional (LOD)
+    void DrawChunk(const ChunkMeshCollection& meshes, float distSq, bool drawFlora);
+
+    void FinishChunkRender(const Camera &camera);
+
     void InitCubeRenderer();
 
 private:
-    ChunkRenderer *m_chunkRenderer;
+    std::unique_ptr<ChunkRenderer> m_chunkRenderer;
+    void ensureChunkRenderer();
 };
 
 

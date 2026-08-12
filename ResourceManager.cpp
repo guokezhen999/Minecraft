@@ -6,8 +6,8 @@
 
 #include "stb_image/stb_image.h"
 
-BasicTexture ResourceManager::BlockTexture;
-BasicShader ResourceManager::BlockShader;
+BasicTexture* ResourceManager::BlockTexture = nullptr;
+BasicShader* ResourceManager::BlockShader = nullptr;
 
 BasicTexture ResourceManager::LoadTextureFromFile(const GLchar *file)
 {

@@ -5,7 +5,7 @@
 #ifndef MINECRAFT_CONTEXT_H
 #define MINECRAFT_CONTEXT_H
 
-#include <GLFW/glfw3.h>
+#include <SFML/Window/Window.hpp>
 
 #include "Config.h"
 
@@ -13,7 +13,7 @@ struct Context
 {
     Context(const Config &config);
 
-    GLFWwindow *Window;
+    sf::Window *window;
 };
 
 

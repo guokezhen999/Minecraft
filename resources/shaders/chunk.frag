@@ -10,7 +10,7 @@ vec4 color;
 
 void main()
 {
-    color = texture(texture1. TexCoords);
+    color = texture(texture1, TexCoords);
     FragColor = color * CardinalLight;
     if (FragColor.a == 0)
         discard;

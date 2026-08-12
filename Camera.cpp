@@ -16,17 +16,17 @@ Camera::Camera(const Config &config, glm::vec3 position, glm::vec3 up, float yaw
     updateCameraVectors();
 }
 
-glm::mat4& Camera::GetViewMatrix()
+const glm::mat4& Camera::GetViewMatrix() const
 {
     return m_viewMatrix;
 }
 
-glm::mat4 &Camera::GetProjectionMatrix()
+const glm::mat4 &Camera::GetProjectionMatrix() const
 {
     return m_projectionMatrix;
 }
 
-glm::mat4 &Camera::GetProjectionViewMatrix()
+const glm::mat4 &Camera::GetProjectionViewMatrix() const
 {
     return m_projectionViewMatrix;
 }
@@ -78,6 +78,19 @@ void Camera::ProcessMouseScroll(float yoffset)
         Zoom = 0.5f;
     if (Zoom > 45.0f)
         Zoom = 45.0f;
+    updateMatrices();
+}
+
+void Camera::UpdateAspectRatio(int width, int height)
+{
+    m_config.windowX = width;
+    m_config.windowY = height;
+    updateMatrices();
+}
+
+void Camera::SetPosition(const glm::vec3& position)
+{
+    Position = position;
     updateMatrices();
 }
 

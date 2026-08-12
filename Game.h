@@ -6,12 +6,15 @@
 #define MINECRAFT_GAME_H
 
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include <SFML/Graphics.hpp>
+#include <SFML/System.hpp>
+#include <SFML/Window.hpp>
 
 #include "Config.h"
 #include "Context.h"
 #include "Camera.h"
 #include "Renderer/RenderMaster.h"
+#include "World/World.h"
 
 #include <iostream>
 
@@ -33,6 +36,9 @@ public:
     GLboolean Keys[1024];
     bool KeyProcessed[1024];
     bool IsPopState = false;
+
+    // World (holds all Chunks + terrain generator)
+    std::unique_ptr<World> m_World;
 };
 
 #endif //MINECRAFT_GAME_H

@@ -20,7 +20,7 @@ public:
     // Queue chunk meshes; flora optional (LOD)
     void DrawChunk(const ChunkMeshCollection& meshes, float distSq, bool drawFlora);
 
-    void FinishChunkRender(const Camera &camera);
+    void FinishChunkRender(const Camera &camera, bool underwater = false);
 
     void InitCubeRenderer();
 

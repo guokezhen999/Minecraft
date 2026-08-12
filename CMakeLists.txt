@@ -79,6 +79,12 @@ add_executable(Minecraft
         Renderer/OutlineRenderer.cpp
         Renderer/CrosshairRenderer.h
         Renderer/CrosshairRenderer.cpp
+        Renderer/HotbarRenderer.h
+        Renderer/HotbarRenderer.cpp
+        Renderer/SkyRenderer.h
+        Renderer/SkyRenderer.cpp
+        UI/Hotbar.h
+        UI/Hotbar.cpp
         World/TerrainGenerator.h
         World/TerrainGenerator.cpp
         World/World.h

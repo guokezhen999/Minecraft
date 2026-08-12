@@ -38,7 +38,10 @@ public:
     World& operator=(const World&) = delete;
 
     void Update(const glm::vec3& cameraPos);
-    void Render(RenderMaster& master, const Camera& camera);
+    void Render(RenderMaster& master, const Camera& camera, bool underwater = false);
+
+    // True if eyes are below the water surface in the current cell
+    bool isCameraUnderwater(const glm::vec3& eyePos) const;
 
     // Thread-safe block query
     ChunkBlock getBlock(int worldX, int worldY, int worldZ) const;
@@ -63,6 +66,22 @@ private:
         int cx, cz;
     };
 
+    struct BlockPos {
+        int x, y, z;
+        bool operator==(const BlockPos& o) const {
+            return x == o.x && y == o.y && z == o.z;
+        }
+    };
+
+    struct BlockPosHash {
+        size_t operator()(const BlockPos& p) const {
+            size_t h = static_cast<size_t>(p.x) * 73856093u;
+            h ^= static_cast<size_t>(p.y) * 19349663u;
+            h ^= static_cast<size_t>(p.z) * 83492791u;
+            return h;
+        }
+    };
+
     void workerLoop();
 
     void enqueueMissingChunks(int centerCX, int centerCZ);
@@ -77,12 +96,25 @@ private:
     void placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz);
     void setWorldBlock(Chunk& chunk, int cx, int cz,
                        int wx, int wy, int wz, BlockId id);
-    // Decoration only: never overwrite water / solid terrain
+    // Decorations only: never overwrite water / solid terrain
     void setDecorationBlock(Chunk& chunk, int cx, int cz,
                             int wx, int wy, int wz, BlockId id);
 
     void markMeshDirty(int cx, int cz);
     void markNeighborsDirty(int cx, int cz);
+
+    void scheduleFluidUpdate(int x, int y, int z);
+    void scheduleFluidAround(int x, int y, int z);
+    void updateFluids();
+    void updateFluidAt(int x, int y, int z,
+                       std::vector<std::pair<int, int>>& remeshCols);
+
+    // Requires unique lock on m_chunkMutex. Queues remesh column; optional fluid.
+    bool setBlockDeferred(int worldX, int worldY, int worldZ, ChunkBlock block,
+                          std::vector<std::pair<int, int>>& remeshCols,
+                          bool scheduleFluid);
+
+    void remeshAndUploadColumns(const std::vector<std::pair<int, int>>& cols);
 
     static uint64_t chunkKey(int cx, int cz) {
         return (static_cast<uint64_t>(static_cast<uint32_t>(cx)) << 32) |
@@ -94,6 +126,10 @@ private:
     mutable std::shared_mutex m_chunkMutex;
     std::unordered_map<uint64_t, std::unique_ptr<Chunk>> m_chunks;
     TerrainGenerator m_generator;
+
+    // Fluid update queue (main thread only)
+    std::deque<BlockPos> m_fluidQueue;
+    std::unordered_set<BlockPos, BlockPosHash> m_fluidQueued;
 
     // ── Worker queues ───────────────────────────────────────────────────────
     std::mutex m_queueMutex;

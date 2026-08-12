@@ -5,6 +5,7 @@
 #include "World/World.h"
 #include "World/WorldConstants.h"
 #include "World/Block/BlockDataBase.h"
+#include "World/Block/Water.h"
 
 #include <cmath>
 #define GLFW_INCLUDE_NONE
@@ -28,6 +29,8 @@ void Game::Init()
     m_RenderMaster.InitCubeRenderer();
     m_outlineRenderer = std::make_unique<OutlineRenderer>();
     m_crosshairRenderer = std::make_unique<CrosshairRenderer>();
+    m_hotbarRenderer = std::make_unique<HotbarRenderer>();
+    m_skyRenderer = std::make_unique<SkyRenderer>();
 
     constexpr int WORLD_SEED = 114514;
     m_World = std::make_unique<World>(WORLD_SEED);
@@ -49,19 +52,27 @@ void Game::Init()
 
 void Game::Render(int windowWidth, int windowHeight)
 {
-    m_World->Render(m_RenderMaster, *m_Camera);
+    if (m_skyRenderer)
+        m_skyRenderer->Render(*m_Camera, m_cameraUnderwater);
+
+    m_World->Render(m_RenderMaster, *m_Camera, m_cameraUnderwater);
 
     if (m_target.hit && m_outlineRenderer)
         m_outlineRenderer->Render(*m_Camera, m_target.blockPos);
 
     if (m_crosshairRenderer)
         m_crosshairRenderer->Render(windowWidth, windowHeight);
+
+    if (m_hotbarRenderer)
+        m_hotbarRenderer->Render(m_hotbar, windowWidth, windowHeight);
 }
 
 void Game::Update(float deltaTime)
 {
     m_Player->update(*m_World, deltaTime);
     m_Player->syncCamera(*m_Camera);
+
+    m_cameraUnderwater = m_World->isCameraUnderwater(m_Camera->Position);
 
     m_World->Update(m_Camera->Position);
     updateTargetBlock();
@@ -92,19 +103,45 @@ void Game::OnRightClick()
     if (!m_target.hit)
         return;
 
+    const BlockId selected = m_hotbar.selectedBlock();
+    ChunkBlock toPlace(selected);
+    if (selected == BlockId::Water)
+        toPlace = Water::makeSource();
+
+    const glm::ivec3& hit = m_target.blockPos;
+    const ChunkBlock targeted = m_World->getBlock(hit.x, hit.y, hit.z);
+
+    // Cover: replace targeted water / plants with the selected solid
+    if (selected != BlockId::Water && Water::isReplaceable(targeted)) {
+        if (!m_Player->intersectsBlock(hit.x, hit.y, hit.z)) {
+            m_World->setBlock(hit.x, hit.y, hit.z, toPlace);
+            updateTargetBlock();
+        }
+        return;
+    }
+
+    // Place into the adjacent cell (air / water / plants)
     const glm::ivec3& p = m_target.previousPos;
     if (p.y < 0 || p.y >= WORLD_HEIGHT)
         return;
 
-    if (m_World->getBlock(p.x, p.y, p.z) != BlockId::Air)
+    if (!Water::isReplaceable(m_World->getBlock(p.x, p.y, p.z)))
         return;
 
-    // Do not place inside the player body
     if (m_Player->intersectsBlock(p.x, p.y, p.z))
         return;
 
-    m_World->setBlock(p.x, p.y, p.z, ChunkBlock(m_placeBlock));
+    m_World->setBlock(p.x, p.y, p.z, toPlace);
     updateTargetBlock();
+}
+
+void Game::OnScroll(float yoffset)
+{
+    // Minecraft-style: wheel cycles hotbar (not FOV)
+    if (yoffset > 0.0f)
+        m_hotbar.cycleSlot(-1);
+    else if (yoffset < 0.0f)
+        m_hotbar.cycleSlot(1);
 }
 
 void Game::ProcessInput(float deltaTime)
@@ -153,24 +190,19 @@ void Game::ProcessInput(float deltaTime)
     if (Keys[GLFW_KEY_RIGHT])
         m_Camera->ProcessMouseMovement( lookDelta, 0.0f);
 
-    if (Keys[GLFW_KEY_1] && !KeyProcessed[GLFW_KEY_1]) {
-        m_placeBlock = BlockId::Stone;
-        KeyProcessed[GLFW_KEY_1] = true;
+    // Hotbar slots 1–9
+    static const int slotKeys[Hotbar::SLOT_COUNT] = {
+        GLFW_KEY_1, GLFW_KEY_2, GLFW_KEY_3,
+        GLFW_KEY_4, GLFW_KEY_5, GLFW_KEY_6,
+        GLFW_KEY_7, GLFW_KEY_8, GLFW_KEY_9,
+    };
+    for (int i = 0; i < Hotbar::SLOT_COUNT; ++i) {
+        const int key = slotKeys[i];
+        if (Keys[key] && !KeyProcessed[key]) {
+            m_hotbar.selectSlot(i);
+            KeyProcessed[key] = true;
+        }
+        if (!Keys[key])
+            KeyProcessed[key] = false;
     }
-    if (Keys[GLFW_KEY_2] && !KeyProcessed[GLFW_KEY_2]) {
-        m_placeBlock = BlockId::Dirt;
-        KeyProcessed[GLFW_KEY_2] = true;
-    }
-    if (Keys[GLFW_KEY_3] && !KeyProcessed[GLFW_KEY_3]) {
-        m_placeBlock = BlockId::Grass;
-        KeyProcessed[GLFW_KEY_3] = true;
-    }
-    if (Keys[GLFW_KEY_4] && !KeyProcessed[GLFW_KEY_4]) {
-        m_placeBlock = BlockId::Sand;
-        KeyProcessed[GLFW_KEY_4] = true;
-    }
-    if (!Keys[GLFW_KEY_1]) KeyProcessed[GLFW_KEY_1] = false;
-    if (!Keys[GLFW_KEY_2]) KeyProcessed[GLFW_KEY_2] = false;
-    if (!Keys[GLFW_KEY_3]) KeyProcessed[GLFW_KEY_3] = false;
-    if (!Keys[GLFW_KEY_4]) KeyProcessed[GLFW_KEY_4] = false;
 }

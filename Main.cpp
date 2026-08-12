@@ -3,6 +3,7 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include "Game.h"
+#include "World/WorldConstants.h"
 
 namespace
 {
@@ -85,7 +86,9 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int)
 
 void scrollCallback(GLFWwindow* window, double, double yoffset)
 {
-    inputState(window)->camera->ProcessMouseScroll(static_cast<float>(yoffset));
+    InputState* input = inputState(window);
+    if (input->mouseCaptured)
+        input->game->OnScroll(static_cast<float>(yoffset));
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
@@ -166,7 +169,10 @@ int main()
         game.ProcessInput(deltaTime);
         game.Update(deltaTime);
 
-        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+        if (game.isCameraUnderwater())
+            glClearColor(UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B, 1.0f);
+        else
+            glClearColor(FOG_R, FOG_G, FOG_B, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);

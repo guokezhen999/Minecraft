@@ -18,10 +18,11 @@ class ChunkRenderer
 {
 public:
     void AddSolid(const ChunkMesh &mesh);
+    void AddWater(const ChunkMesh &mesh, float distSq);
     void AddTransparent(const ChunkMesh &mesh, float distSq);
 
     // Opaque pass, then back-to-front transparent pass
-    void Render(const Camera &camera);
+    void Render(const Camera &camera, bool underwater = false);
 
 private:
     struct TransparentDraw {
@@ -30,6 +31,7 @@ private:
     };
 
     std::vector<const Model *> m_solid;
+    std::vector<TransparentDraw> m_water;
     std::vector<TransparentDraw> m_transparent;
 
     ChunkShader m_shader;

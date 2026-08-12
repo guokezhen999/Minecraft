@@ -47,12 +47,19 @@ private:
     ChunkBlock getAdjacentBlock(const World& world, int x, int y, int z) const;
     static bool shouldDrawFaceAgainst(const ChunkBlock& neighbor);
 
-    void addXPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addXNegativeFace(int x, int y, int z, const ChunkBlock& block);
-    void addYPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addYNegativeFace(int x, int y, int z, const ChunkBlock& block);
-    void addZPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addZNegativeFace(int x, int y, int z, const ChunkBlock& block);
+    void addXPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+    void addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+    void addYPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+    void addYNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+    void addZPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+    void addZNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block);
+
+    void addWaterBlock(const World& world, int x, int y, int z, const ChunkBlock& block);
+    bool shouldDrawWaterSide(const World& world, int x, int y, int z, float myHeight) const;
+
+    bool occludesAO(const World& world, int x, int y, int z) const;
+    static int vertexAO(bool side1, bool side2, bool corner);
+    static float shadeAO(int ao, float cardinal);
 
 private:
     std::vector<ChunkBlock> m_blocks;

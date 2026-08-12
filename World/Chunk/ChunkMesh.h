@@ -20,6 +20,12 @@ public:
                  const sf::Vector3i &chunkPosition,
                  const sf::Vector3i &blockPosition, GLfloat cardinalLight);
 
+    void addFace(const std::array<GLfloat, 12> &blockFace,
+                 const std::array<GLfloat, 8> &textureCoords,
+                 const sf::Vector3i &chunkPosition,
+                 const sf::Vector3i &blockPosition,
+                 const std::array<GLfloat, 4> &vertexLights);
+
     // Drop CPU vertex data without touching GPU
     void clearCPU();
 

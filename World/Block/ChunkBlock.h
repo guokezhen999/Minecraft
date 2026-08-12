@@ -7,6 +7,8 @@
 
 #include "BlockId.h"
 
+#include <cstdint>
+
 struct BlockDataHolder;
 class BlockType;
 
@@ -23,16 +25,22 @@ public:
 
     bool operator==(ChunkBlock other) const
     {
-        return id == other.id;
+        return id == other.id && meta == other.meta;
     }
 
     bool operator!=(ChunkBlock other) const
     {
-        return id != other.id;
+        return !(*this == other);
     }
 
+    // Compare type only (ignores fluid meta)
+    bool is(BlockId blockId) const
+    {
+        return id == static_cast<Block_t>(blockId);
+    }
 
     Block_t id = 0;
+    uint8_t meta = 0; // water: flow level 0–7 (0 = source)
 };
 
 

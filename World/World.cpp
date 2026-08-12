@@ -8,6 +8,7 @@
 #include "../Camera.h"
 #include "../Util/Frustum.h"
 #include "Block/BlockData.h"
+#include "Block/Water.h"
 
 #include <cmath>
 #include <algorithm>
@@ -81,58 +82,94 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
     if (worldY < 0 || worldY >= WORLD_HEIGHT)
         return false;
 
+    std::vector<std::pair<int, int>> remeshCols;
+    remeshCols.reserve(5);
+
+    {
+        std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
+        if (!setBlockDeferred(worldX, worldY, worldZ, block, remeshCols, true))
+            return false;
+    }
+
+    remeshAndUploadColumns(remeshCols);
+    return true;
+}
+
+bool World::setBlockDeferred(int worldX, int worldY, int worldZ, ChunkBlock block,
+                             std::vector<std::pair<int, int>>& remeshCols,
+                             bool scheduleFluid) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT)
+        return false;
+
     const int cx = worldToChunk(worldX);
     const int cz = worldToChunk(worldZ);
     const int lx = worldX - cx * CHUNK_SIZE;
     const int lz = worldZ - cz * CHUNK_SIZE;
     const int sy = worldY / CHUNK_SIZE;
 
-    std::vector<std::pair<int, int>> toRemesh;
-    toRemesh.reserve(5);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end())
+        return false;
 
+    if (it->second->getBlock(lx, worldY, lz) == block)
+        return false;
+
+    it->second->setBlock(lx, worldY, lz, block);
+
+    auto addRemesh = [&](int rcx, int rcz) {
+        for (const auto& c : remeshCols) {
+            if (c.first == rcx && c.second == rcz)
+                return;
+        }
+        remeshCols.emplace_back(rcx, rcz);
+    };
+
+    addRemesh(cx, cz);
+    if (lx == 0) {
+        auto nit = m_chunks.find(chunkKey(cx - 1, cz));
+        if (nit != m_chunks.end()) {
+            nit->second->markSectionDirty(sy);
+            addRemesh(cx - 1, cz);
+        }
+    }
+    if (lx == CHUNK_SIZE - 1) {
+        auto nit = m_chunks.find(chunkKey(cx + 1, cz));
+        if (nit != m_chunks.end()) {
+            nit->second->markSectionDirty(sy);
+            addRemesh(cx + 1, cz);
+        }
+    }
+    if (lz == 0) {
+        auto nit = m_chunks.find(chunkKey(cx, cz - 1));
+        if (nit != m_chunks.end()) {
+            nit->second->markSectionDirty(sy);
+            addRemesh(cx, cz - 1);
+        }
+    }
+    if (lz == CHUNK_SIZE - 1) {
+        auto nit = m_chunks.find(chunkKey(cx, cz + 1));
+        if (nit != m_chunks.end()) {
+            nit->second->markSectionDirty(sy);
+            addRemesh(cx, cz + 1);
+        }
+    }
+
+    // Vertical neighbor section when on section boundary
+    if (worldY % CHUNK_SIZE == 0 && sy > 0)
+        it->second->markSectionDirty(sy - 1);
+    if (worldY % CHUNK_SIZE == CHUNK_SIZE - 1 && sy + 1 < CHUNK_SECTIONS)
+        it->second->markSectionDirty(sy + 1);
+
+    if (scheduleFluid)
+        scheduleFluidAround(worldX, worldY, worldZ);
+
+    return true;
+}
+
+void World::remeshAndUploadColumns(const std::vector<std::pair<int, int>>& cols) {
     {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
-        auto it = m_chunks.find(chunkKey(cx, cz));
-        if (it == m_chunks.end())
-            return false;
-
-        if (it->second->getBlock(lx, worldY, lz) == block)
-            return false;
-
-        it->second->setBlock(lx, worldY, lz, block);
-
-        toRemesh.emplace_back(cx, cz);
-        if (lx == 0) {
-            auto nit = m_chunks.find(chunkKey(cx - 1, cz));
-            if (nit != m_chunks.end()) {
-                nit->second->markSectionDirty(sy);
-                toRemesh.emplace_back(cx - 1, cz);
-            }
-        }
-        if (lx == CHUNK_SIZE - 1) {
-            auto nit = m_chunks.find(chunkKey(cx + 1, cz));
-            if (nit != m_chunks.end()) {
-                nit->second->markSectionDirty(sy);
-                toRemesh.emplace_back(cx + 1, cz);
-            }
-        }
-        if (lz == 0) {
-            auto nit = m_chunks.find(chunkKey(cx, cz - 1));
-            if (nit != m_chunks.end()) {
-                nit->second->markSectionDirty(sy);
-                toRemesh.emplace_back(cx, cz - 1);
-            }
-        }
-        if (lz == CHUNK_SIZE - 1) {
-            auto nit = m_chunks.find(chunkKey(cx, cz + 1));
-            if (nit != m_chunks.end()) {
-                nit->second->markSectionDirty(sy);
-                toRemesh.emplace_back(cx, cz + 1);
-            }
-        }
-
-        // Sync remesh dirty sections only so dig/place is visible immediately
-        for (auto [rcx, rcz] : toRemesh) {
+        for (auto [rcx, rcz] : cols) {
             auto rit = m_chunks.find(chunkKey(rcx, rcz));
             if (rit == m_chunks.end())
                 continue;
@@ -140,10 +177,9 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
         }
     }
 
-    // Drop any pending async remesh for these columns (we already rebuilt)
     {
         std::lock_guard<std::mutex> qlock(m_queueMutex);
-        for (auto [rcx, rcz] : toRemesh) {
+        for (auto [rcx, rcz] : cols) {
             const uint64_t key = chunkKey(rcx, rcz);
             m_meshQueued.erase(key);
             for (auto qit = m_meshQueue.begin(); qit != m_meshQueue.end(); ) {
@@ -156,12 +192,184 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
     }
 
     std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
-    for (auto [rcx, rcz] : toRemesh) {
+    for (auto [rcx, rcz] : cols) {
         auto rit = m_chunks.find(chunkKey(rcx, rcz));
         if (rit != m_chunks.end() && rit->second->hasPendingUpload())
             rit->second->bufferPendingMeshes();
     }
-    return true;
+}
+
+void World::scheduleFluidUpdate(int x, int y, int z) {
+    if (y < 0 || y >= WORLD_HEIGHT)
+        return;
+    BlockPos p{x, y, z};
+    if (m_fluidQueued.count(p))
+        return;
+    m_fluidQueued.insert(p);
+    m_fluidQueue.push_back(p);
+}
+
+void World::scheduleFluidAround(int x, int y, int z) {
+    scheduleFluidUpdate(x, y, z);
+    scheduleFluidUpdate(x + 1, y, z);
+    scheduleFluidUpdate(x - 1, y, z);
+    scheduleFluidUpdate(x, y + 1, z);
+    scheduleFluidUpdate(x, y - 1, z);
+    scheduleFluidUpdate(x, y, z + 1);
+    scheduleFluidUpdate(x, y, z - 1);
+}
+
+void World::updateFluids() {
+    if (m_fluidQueue.empty())
+        return;
+
+    std::vector<std::pair<int, int>> remeshCols;
+    remeshCols.reserve(32);
+
+    {
+        std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
+        int budget = MAX_FLUID_UPDATES_PER_FRAME;
+        while (budget-- > 0 && !m_fluidQueue.empty()) {
+            BlockPos p = m_fluidQueue.front();
+            m_fluidQueue.pop_front();
+            m_fluidQueued.erase(p);
+            updateFluidAt(p.x, p.y, p.z, remeshCols);
+        }
+    }
+
+    if (!remeshCols.empty())
+        remeshAndUploadColumns(remeshCols);
+}
+
+void World::updateFluidAt(int x, int y, int z,
+                          std::vector<std::pair<int, int>>& remeshCols) {
+    ChunkBlock self = getBlockLocked(x, y, z);
+
+    static const int kDX[4] = {1, -1, 0, 0};
+    static const int kDZ[4] = {0, 0, 1, -1};
+
+    auto countHorizontalSources = [&](int cx, int cy, int cz) {
+        int n = 0;
+        for (int i = 0; i < 4; ++i) {
+            if (Water::isSource(getBlockLocked(cx + kDX[i], cy, cz + kDZ[i])))
+                ++n;
+        }
+        return n;
+    };
+
+    auto hasInfiniteSupport = [&](int cx, int cy, int cz) {
+        if (cy <= 0)
+            return true;
+        return Water::hasInfiniteSupportBelow(getBlockLocked(cx, cy - 1, cz), cy);
+    };
+
+    // Minecraft-style: ≥2 horizontal sources + solid/source below → new source
+    auto tryFormInfiniteSource = [&](int cx, int cy, int cz) -> bool {
+        if (!hasInfiniteSupport(cx, cy, cz))
+            return false;
+        if (countHorizontalSources(cx, cy, cz) < 2)
+            return false;
+        ChunkBlock here = getBlockLocked(cx, cy, cz);
+        if (Water::isSource(here))
+            return true;
+        if (!Water::canFlowInto(here) && !Water::isWater(here))
+            return false;
+        setBlockDeferred(cx, cy, cz, Water::makeSource(), remeshCols, true);
+        return true;
+    };
+
+    auto tryFlowInto = [&](int nx, int ny, int nz, int newLevel) {
+        if (ny < 0 || ny >= WORLD_HEIGHT)
+            return;
+        ChunkBlock dest = getBlockLocked(nx, ny, nz);
+        if (!Water::canFlowInto(dest))
+            return;
+
+        // Prefer creating an infinite source when the 2-source rule matches
+        if (tryFormInfiniteSource(nx, ny, nz))
+            return;
+
+        if (Water::isWater(dest) && Water::level(dest) <= newLevel)
+            return; // already same or deeper / closer to source
+        setBlockDeferred(nx, ny, nz, Water::make(newLevel), remeshCols, true);
+    };
+
+    if (Water::isWater(self)) {
+        // Upgrade flowing water → source when two sources hug this cell
+        if (!Water::isSource(self))
+            tryFormInfiniteSource(x, y, z);
+
+        self = getBlockLocked(x, y, z);
+        if (!Water::isWater(self))
+            return;
+
+        const int curLevel = Water::level(self);
+
+        const ChunkBlock below =
+            (y > 0) ? getBlockLocked(x, y - 1, z) : ChunkBlock(BlockId::Stone);
+        const bool onGround = Water::isOnSolidGround(below, y);
+        const bool canFall = (y > 0) && Water::canFlowInto(below);
+
+        if (canFall) {
+            // Mid-air / above fluid: fall only — never spread sideways
+            const int downLevel = 1;
+            if (!Water::isWater(below) || Water::level(below) > downLevel)
+                tryFlowInto(x, y - 1, z, downLevel);
+        } else if (onGround && curLevel < Water::MAX_LEVEL) {
+            // Only the cell resting on solid ground may push sideways,
+            // and only into ground-level cells (or empty ledge that will fall).
+            for (int i = 0; i < 4; ++i) {
+                const int nx = x + kDX[i];
+                const int nz = z + kDZ[i];
+                if (y > 0) {
+                    const ChunkBlock destBelow = getBlockLocked(nx, y - 1, nz);
+                    const bool destOnGround = Water::isOnSolidGround(destBelow, y);
+                    const bool destOpenBelow =
+                        destBelow == BlockId::Air ||
+                        destBelow.GetData().meshType == BlockMeshType::X;
+                    // No sideways fill into cells sitting on water / mid column
+                    if (!destOnGround && !destOpenBelow)
+                        continue;
+                }
+                tryFlowInto(nx, y, nz, curLevel + 1);
+            }
+        }
+
+        // Non-source: recompute level from neighbors or evaporate
+        if (!Water::isSource(getBlockLocked(x, y, z))) {
+            int best = Water::MAX_LEVEL + 1;
+            if (y + 1 < WORLD_HEIGHT && Water::isWater(getBlockLocked(x, y + 1, z)))
+                best = 0;
+
+            for (int i = 0; i < 4; ++i) {
+                ChunkBlock n = getBlockLocked(x + kDX[i], y, z + kDZ[i]);
+                if (Water::isWater(n))
+                    best = std::min(best, Water::level(n));
+            }
+
+            const int newLevel = best + 1;
+            if (tryFormInfiniteSource(x, y, z))
+                return;
+
+            if (newLevel > Water::MAX_LEVEL) {
+                setBlockDeferred(x, y, z, ChunkBlock(BlockId::Air), remeshCols, true);
+            } else if (newLevel != Water::level(getBlockLocked(x, y, z))) {
+                setBlockDeferred(x, y, z, Water::make(newLevel), remeshCols, true);
+            }
+        }
+        return;
+    }
+
+    // Empty / plant cell: infinite source, or fall-from-above only.
+    // Do NOT pull from horizontal neighbors — that bypassed the "ground only" rule.
+    if (!Water::canFlowInto(self))
+        return;
+
+    if (tryFormInfiniteSource(x, y, z))
+        return;
+
+    if (y + 1 < WORLD_HEIGHT && Water::isWater(getBlockLocked(x, y + 1, z)))
+        tryFlowInto(x, y, z, 1);
 }
 
 void World::setWorldBlock(Chunk& chunk, int cx, int cz,
@@ -546,9 +754,10 @@ void World::Update(const glm::vec3& cameraPos) {
     enqueueMissingChunks(centerCX, centerCZ);
     integrateGeneratedChunks();
     processMeshUploads();
+    updateFluids();
 }
 
-void World::Render(RenderMaster& master, const Camera& camera) {
+void World::Render(RenderMaster& master, const Camera& camera, bool underwater) {
     Frustum frustum;
     frustum.update(camera.GetProjectionViewMatrix());
 
@@ -588,5 +797,14 @@ void World::Render(RenderMaster& master, const Camera& camera) {
     }
 
     lock.unlock();
-    master.FinishChunkRender(camera);
+    master.FinishChunkRender(camera, underwater);
+}
+
+bool World::isCameraUnderwater(const glm::vec3& eyePos) const {
+    const int bx = static_cast<int>(std::floor(eyePos.x));
+    const int by = static_cast<int>(std::floor(eyePos.y));
+    const int bz = static_cast<int>(std::floor(eyePos.z));
+    const ChunkBlock here = getBlock(bx, by, bz);
+    const ChunkBlock above = getBlock(bx, by + 1, bz);
+    return Water::isSubmerged(here, above, eyePos.y);
 }

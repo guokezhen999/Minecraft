@@ -40,14 +40,14 @@ void RenderMaster::DrawChunk(const ChunkMeshCollection& meshes, float distSq, bo
 {
     ensureChunkRenderer();
     m_chunkRenderer->AddSolid(meshes.solidMesh);
-    m_chunkRenderer->AddTransparent(meshes.waterMesh, distSq);
+    m_chunkRenderer->AddWater(meshes.waterMesh, distSq);
     if (drawFlora) {
         m_chunkRenderer->AddTransparent(meshes.floraMesh, distSq);
     }
 }
 
-void RenderMaster::FinishChunkRender(const Camera &camera)
+void RenderMaster::FinishChunkRender(const Camera &camera, bool underwater)
 {
     ensureChunkRenderer();
-    m_chunkRenderer->Render(camera);
+    m_chunkRenderer->Render(camera, underwater);
 }

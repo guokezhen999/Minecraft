@@ -35,4 +35,22 @@ constexpr float FLORA_LOD_DISTANCE = static_cast<float>(RENDER_DISTANCE * CHUNK_
 // Block interaction
 constexpr float RAYCAST_REACH = 6.0f;
 
+// Fluid simulation (main thread)
+constexpr int MAX_FLUID_UPDATES_PER_FRAME = 192;
+
+// Fog (world-space distance from camera; covers chunk load edge)
+constexpr float FOG_START = static_cast<float>(RENDER_DISTANCE * CHUNK_SIZE) * 0.55f;
+constexpr float FOG_END   = static_cast<float>(RENDER_DISTANCE * CHUNK_SIZE) * 0.92f;
+
+// Daytime sky / fog tint (RGB 0–1)
+constexpr float SKY_TOP_R = 0.37f, SKY_TOP_G = 0.58f, SKY_TOP_B = 0.98f;
+constexpr float SKY_HORIZON_R = 0.72f, SKY_HORIZON_G = 0.82f, SKY_HORIZON_B = 0.95f;
+constexpr float FOG_R = SKY_HORIZON_R, FOG_G = SKY_HORIZON_G, FOG_B = SKY_HORIZON_B;
+
+// Underwater look (dense blue-green fog)
+constexpr float UNDERWATER_FOG_R = 0.04f, UNDERWATER_FOG_G = 0.18f, UNDERWATER_FOG_B = 0.32f;
+constexpr float UNDERWATER_FOG_START = 4.0f;
+constexpr float UNDERWATER_FOG_END = 22.0f;
+constexpr float UNDERWATER_TINT_R = 0.15f, UNDERWATER_TINT_G = 0.40f, UNDERWATER_TINT_B = 0.55f;
+
 #endif //MINECRAFT_WORLDCONSTANTS_H

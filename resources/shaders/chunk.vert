@@ -6,11 +6,13 @@ layout (location = 2) in float aCardinalLight;
 
 out vec2 TexCoords;
 out float CardinalLight;
+out vec3 FragPos;
 
 uniform mat4 projectionView;
 
 void main()
 {
+    FragPos = aPos;
     gl_Position = projectionView * vec4(aPos, 1.0);
     TexCoords = aTexCoords;
     CardinalLight = aCardinalLight;

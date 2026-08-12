@@ -4,7 +4,6 @@
 
 #include "RayCast.h"
 #include "../World/World.h"
-#include "../World/Block/BlockData.h"
 
 #include <cmath>
 
@@ -13,9 +12,7 @@ namespace {
 bool isRayTarget(ChunkBlock block) {
     if (block == BlockId::Air)
         return false;
-    // Pass through water / other liquids
-    if (block.GetData().shaderType == BlockShaderType::Liquid)
-        return false;
+    // Liquids are selectable so they can be dug / covered
     return true;
 }
 

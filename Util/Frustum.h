@@ -46,10 +46,17 @@ struct Frustum {
         return true;
     }
 
-    bool intersectsChunkColumn(int cx, int cz, int chunkSize) const {
+    bool intersectsChunkColumn(int cx, int cz, int chunkSize, int worldHeight) const {
         const float s = static_cast<float>(chunkSize);
         const glm::vec3 minB(cx * s, 0.0f, cz * s);
-        const glm::vec3 maxB((cx + 1) * s, s, (cz + 1) * s);
+        const glm::vec3 maxB((cx + 1) * s, static_cast<float>(worldHeight), (cz + 1) * s);
+        return intersectsAABB(minB, maxB);
+    }
+
+    bool intersectsChunkSection(int cx, int cy, int cz, int chunkSize) const {
+        const float s = static_cast<float>(chunkSize);
+        const glm::vec3 minB(cx * s, cy * s, cz * s);
+        const glm::vec3 maxB((cx + 1) * s, (cy + 1) * s, (cz + 1) * s);
         return intersectsAABB(minB, maxB);
     }
 };

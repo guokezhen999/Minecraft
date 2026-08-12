@@ -53,6 +53,8 @@ add_executable(Minecraft
         World/Block/ChunkBlock.h
         World/Chunk/Chunk.h
         World/Chunk/Chunk.cpp
+        World/Chunk/ChunkSection.h
+        World/Chunk/ChunkSection.cpp
         ResourceManager.cpp
         ResourceManager.h
         World/Block/BlockDataBase.cpp

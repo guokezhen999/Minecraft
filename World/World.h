@@ -1,5 +1,6 @@
 //
 // World.h – chunk streaming with async gen/mesh, frustum cull, LOD
+// Vertical columns of ChunkSections (WORLD_HEIGHT)
 //
 
 #ifndef MINECRAFT_WORLD_H
@@ -45,7 +46,7 @@ public:
     // Caller must already hold a shared/unique lock on the chunk map
     ChunkBlock getBlockLocked(int worldX, int worldY, int worldZ) const;
 
-    // Edit world block and remesh affected chunks (main / GL thread).
+    // Edit world block and remesh affected sections (main / GL thread).
     // Returns false if Y out of range or the chunk is not loaded.
     bool setBlock(int worldX, int worldY, int worldZ, ChunkBlock block);
 
@@ -53,6 +54,9 @@ public:
     bool isCollidable(int worldX, int worldY, int worldZ) const;
 
     bool isChunkLoaded(int cx, int cz) const;
+
+    // Terrain surface Y at column (same as generator; ignores player edits)
+    int getSurfaceHeight(int worldX, int worldZ) const;
 
 private:
     struct ChunkCoord {
@@ -73,6 +77,9 @@ private:
     void placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz);
     void setWorldBlock(Chunk& chunk, int cx, int cz,
                        int wx, int wy, int wz, BlockId id);
+    // Decoration only: never overwrite water / solid terrain
+    void setDecorationBlock(Chunk& chunk, int cx, int cz,
+                            int wx, int wy, int wz, BlockId id);
 
     void markMeshDirty(int cx, int cz);
     void markNeighborsDirty(int cx, int cz);

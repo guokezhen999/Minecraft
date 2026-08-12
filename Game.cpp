@@ -33,8 +33,15 @@ void Game::Init()
     m_World = std::make_unique<World>(WORLD_SEED);
 
     m_Player = std::make_unique<Player>();
-    // Spawn above water; gravity drops the player onto terrain once chunks load
-    m_Player->setPosition(glm::vec3(0.5f, static_cast<float>(WATER_LEVEL) + 8.0f, 0.5f));
+    // Spawn just above terrain (and above sea level if the column is flooded)
+    constexpr int SPAWN_X = 0;
+    constexpr int SPAWN_Z = 0;
+    const int surfaceY = m_World->getSurfaceHeight(SPAWN_X, SPAWN_Z);
+    const float spawnY =
+        static_cast<float>(std::max(surfaceY, WATER_LEVEL)) + 2.0f;
+    m_Player->setPosition(glm::vec3(static_cast<float>(SPAWN_X) + 0.5f,
+                                    spawnY,
+                                    static_cast<float>(SPAWN_Z) + 0.5f));
     m_Player->syncCamera(*m_Camera);
 
     m_World->Update(m_Camera->Position);
@@ -86,7 +93,7 @@ void Game::OnRightClick()
         return;
 
     const glm::ivec3& p = m_target.previousPos;
-    if (p.y < 0 || p.y >= CHUNK_SIZE)
+    if (p.y < 0 || p.y >= WORLD_HEIGHT)
         return;
 
     if (m_World->getBlock(p.x, p.y, p.z) != BlockId::Air)

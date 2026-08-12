@@ -1,6 +1,6 @@
 # Minecraft 克隆 — 开发规划
 
-> 当前进度：**可站立行走的体素世界**（重力 / 碰撞 / 跳跃 / 飞行切换）。  
+> 当前进度：**垂直 Section 体素世界**（高度 128、水面/群系重调、按 Section 脏标记重建）。  
 > 目标：从「风景浏览器」推进到「可玩的体素沙盒原型」。
 
 ---
@@ -11,18 +11,18 @@
 
 - SFML 窗口、OpenGL 3.3、相机（WASD + 鼠标/方向键）
 - 着色器、纹理图集、方块数据（草/土/石/水/树/花草等）
-- Chunk（16³）+ 面剔除 Mesh（solid / water / flora）
-- World：按相机加载视野 Chunk、距离裁剪渲染
-- 种子噪声地形：海洋 / 草原 / 沙漠 / 山地 + 树木与装饰
+- Chunk 列（8 × 16³ Section）+ 面剔除 Mesh（solid / water / flora）
+- World：按相机加载视野 Chunk、距离裁剪渲染、按 Section 视锥剔除
+- 种子噪声地形：海洋 / 草原 / 沙漠 / 山地 + 树木与装饰（适配 WORLD_HEIGHT）
 - **阶段 0 修债** + **渲染优化**：视锥剔除、异步生成/建网、透明排序、flora LOD、批量绘制
 - **阶段 1 方块交互**：`getBlock` / `setBlock`、Raycast、左键挖 / 右键放、选中框
 - **阶段 2 玩家物理**：AABB 碰撞、重力、跳跃、潜行、飞行开关、相机绑眼睛高度
+- **阶段 3 世界结构**：垂直 Section、水面/群系重调、Section 脏标记、异步生成（沿用）
 
 ### 主要缺口
 
-- 仅一层 16 高 Chunk（阶段 3 再做垂直 Section）
 - 无背包 / HUD / 存档 / 真实光照
-- 尚未做真正的 mesh 合并（多 Chunk 合成单 VBO）；当前是按 solid/transparent 分批减少状态切换
+- 尚未做真正的 mesh 合并（多 Section 合成单 VBO）；当前是按 solid/transparent 分批减少状态切换
 
 ### 阶段定位
 
@@ -32,7 +32,7 @@
 | 2 | Chunk mesh + 面剔除 | 完成 |
 | 3 | 无限世界 + 程序化地形 | 完成 |
 | 4 | 破坏 / 放置方块 | 完成 |
-| 5 | 碰撞 / 重力 / 第一人称玩家 | **完成（见下方阶段 2）** |
+| 5 | 碰撞 / 重力 / 第一人称玩家 | 完成 |
 | 6 | 光照、生物、UI、存档… | **当前** |
 
 ---
@@ -84,18 +84,18 @@
 
 ---
 
-## 阶段 3：世界结构升级
+## 阶段 3：世界结构升级 ✅
 
 目标：更接近 Minecraft 的世界尺度。
 
-1. **垂直 Chunk Section**  
-   一列多个 16³ section，高度拉到 128 / 256。
-2. **水面 / 生物群系参数重调**  
-   在正确高度下重设 `WATER_LEVEL`、山地高度等。
-3. **Chunk 脏标记**  
-   只 rebuild 改过的 section，避免全图重算。
-4. **（可选）异步生成**  
-   工作线程生成 mesh，主线程上传 GPU。
+1. **垂直 Chunk Section** ✅  
+   一列 `CHUNK_SECTIONS`（8）个 16³ section，`WORLD_HEIGHT = 128`。
+2. **水面 / 生物群系参数重调** ✅  
+   `WATER_LEVEL = 62`；海洋 / 草原 / 沙漠 / 山地振幅按新高度重设。
+3. **Chunk 脏标记** ✅  
+   每 Section 独立 dirty；改块只 rebuild 本 Section 与垂直/水平邻接 Section。
+4. **异步生成** ✅  
+   工作线程生成 / 建网，主线程限流上传 GPU（阶段 0 已有，垂直后沿用）。
 
 ---
 
@@ -141,8 +141,9 @@
     → World get/setBlock
     → Raycast 挖放
     → AABB 碰撞重力
+    → 垂直 Section
     → Hotbar
-    → 垂直 Section / 雾 / 光照
+    → 雾 / 光照
     → 洞穴矿石 / 存档
 ```
 
@@ -153,8 +154,7 @@
 3. `getBlock` / `setBlock` ✅  
 4. Raycast + 挖放 + mesh 更新 ✅  
 5. AABB + 重力 ✅  
-
-完成以上 5 步后，项目即从「风景浏览器」进入「可玩体素沙盒原型」。
+6. 垂直 Section + 高度重调 ✅  
 
 ---
 
@@ -166,7 +166,8 @@
 | 玩家物理 | `Physics/Player.cpp` |
 | 世界 / Chunk 管理 | `World/World.cpp` |
 | 地形生成 | `World/TerrainGenerator.cpp` |
-| Chunk / Mesh | `World/Chunk/` |
+| Chunk 列 / Section | `World/Chunk/Chunk.*` / `ChunkSection.*` |
+| Chunk Mesh | `World/Chunk/ChunkMesh.*` |
 | 射线检测 | `Physics/RayCast.cpp` |
 | 选中框 | `Renderer/OutlineRenderer.cpp` |
 | 渲染调度 | `Renderer/RenderMaster.cpp` |

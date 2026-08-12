@@ -1,59 +1,62 @@
 //
-// Created by 郭珂桢 on 25-8-1.
+// Chunk – vertical column of ChunkSections at (cx, cz)
 //
 
 #ifndef MINECRAFT_CHUNK_H
 #define MINECRAFT_CHUNK_H
 
-#include "IChunk.h"
-#include "ChunkMesh.h"
+#include "ChunkSection.h"
 #include "../WorldConstants.h"
 
-#include <vector>
-#include <SFML/Graphics.hpp>
+#include <array>
+#include <memory>
 
 class World;
 
-class Chunk : public IChunk {
+class Chunk {
 public:
-    Chunk(const sf::Vector3i& position);
-    ~Chunk() override;
+    Chunk(int cx, int cz);
+    ~Chunk() = default;
 
-    ChunkBlock getBlock(int x, int y, int z) const override;
-    void setBlock(int x, int y, int z, ChunkBlock block) override;
+    Chunk(const Chunk&) = delete;
+    Chunk& operator=(const Chunk&) = delete;
 
-    // Build vertex data on CPU (safe on worker thread; no GL calls)
-    void buildMesh(const World& world);
+    int getCX() const { return m_cx; }
+    int getCZ() const { return m_cz; }
 
-    // Upload pending CPU mesh to GPU (GL thread only)
-    void bufferMeshes();
+    // Local XZ + world Y
+    ChunkBlock getBlock(int lx, int worldY, int lz) const;
+    void setBlock(int lx, int worldY, int lz, ChunkBlock block);
 
-    bool hasMesh() const { return m_hasMesh; }
-    bool hasPendingUpload() const { return m_pendingUpload; }
+    // Like setBlock but does not mark sections dirty (bulk terrain fill)
+    void setBlockRaw(int lx, int worldY, int lz, ChunkBlock block);
 
-    const ChunkMeshCollection& getMeshes() const;
-    const sf::Vector3i& getLocation() const;
+    void markSectionDirty(int sectionY);
+    void markAllDirty();
+    // After bulk fill: dirty only sections that contain blocks
+    void markNonEmptySectionsDirty();
+
+    // Rebuild only dirty sections (CPU; worker-safe)
+    void buildDirtyMeshes(const World& world);
+
+    // Upload any sections with pending GPU data (GL thread)
+    void bufferPendingMeshes();
+
+    bool hasMesh() const;
+    bool hasPendingUpload() const;
+    bool hasDirtySections() const;
+
+    ChunkSection& getSection(int sectionY);
+    const ChunkSection& getSection(int sectionY) const;
 
 private:
-    bool outOfBounds(int x, int y, int z) const;
-    int getIndex(int x, int y, int z) const;
+    static bool validLocalXZ(int lx, int lz);
+    static int sectionIndex(int worldY);
+    static int localY(int worldY);
 
-    ChunkBlock getAdjacentBlock(const World& world, int x, int y, int z) const;
-    static bool shouldDrawFaceAgainst(const ChunkBlock& neighbor);
-
-    void addXPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addXNegativeFace(int x, int y, int z, const ChunkBlock& block);
-    void addYPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addYNegativeFace(int x, int y, int z, const ChunkBlock& block);
-    void addZPositiveFace(int x, int y, int z, const ChunkBlock& block);
-    void addZNegativeFace(int x, int y, int z, const ChunkBlock& block);
-
-private:
-    std::vector<ChunkBlock> m_blocks;
-    ChunkMeshCollection m_meshes;
-    sf::Vector3i m_location;
-    bool m_hasMesh = false;
-    bool m_pendingUpload = false;
+    int m_cx;
+    int m_cz;
+    std::array<std::unique_ptr<ChunkSection>, CHUNK_SECTIONS> m_sections;
 };
 
 #endif //MINECRAFT_CHUNK_H

@@ -1,5 +1,6 @@
 //
 // World.cpp – async chunk gen/mesh, frustum cull, flora LOD
+// Vertical columns of ChunkSections
 //
 
 #include "World.h"
@@ -35,7 +36,7 @@ ChunkBlock World::getBlock(int worldX, int worldY, int worldZ) const {
 }
 
 ChunkBlock World::getBlockLocked(int worldX, int worldY, int worldZ) const {
-    if (worldY < 0 || worldY >= CHUNK_SIZE) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT) {
         return ChunkBlock(BlockId::Air);
     }
 
@@ -56,10 +57,14 @@ bool World::isChunkLoaded(int cx, int cz) const {
     return m_chunks.count(chunkKey(cx, cz)) > 0;
 }
 
+int World::getSurfaceHeight(int worldX, int worldZ) const {
+    return m_generator.getHeight(worldX, worldZ);
+}
+
 bool World::isCollidable(int worldX, int worldY, int worldZ) const {
     if (worldY < 0)
         return true;
-    if (worldY >= CHUNK_SIZE)
+    if (worldY >= WORLD_HEIGHT)
         return false;
 
     const int cx = worldToChunk(worldX);
@@ -73,13 +78,14 @@ bool World::isCollidable(int worldX, int worldY, int worldZ) const {
 }
 
 bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
-    if (worldY < 0 || worldY >= CHUNK_SIZE)
+    if (worldY < 0 || worldY >= WORLD_HEIGHT)
         return false;
 
     const int cx = worldToChunk(worldX);
     const int cz = worldToChunk(worldZ);
     const int lx = worldX - cx * CHUNK_SIZE;
     const int lz = worldZ - cz * CHUNK_SIZE;
+    const int sy = worldY / CHUNK_SIZE;
 
     std::vector<std::pair<int, int>> toRemesh;
     toRemesh.reserve(5);
@@ -96,25 +102,45 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
         it->second->setBlock(lx, worldY, lz, block);
 
         toRemesh.emplace_back(cx, cz);
-        if (lx == 0)
-            toRemesh.emplace_back(cx - 1, cz);
-        if (lx == CHUNK_SIZE - 1)
-            toRemesh.emplace_back(cx + 1, cz);
-        if (lz == 0)
-            toRemesh.emplace_back(cx, cz - 1);
-        if (lz == CHUNK_SIZE - 1)
-            toRemesh.emplace_back(cx, cz + 1);
+        if (lx == 0) {
+            auto nit = m_chunks.find(chunkKey(cx - 1, cz));
+            if (nit != m_chunks.end()) {
+                nit->second->markSectionDirty(sy);
+                toRemesh.emplace_back(cx - 1, cz);
+            }
+        }
+        if (lx == CHUNK_SIZE - 1) {
+            auto nit = m_chunks.find(chunkKey(cx + 1, cz));
+            if (nit != m_chunks.end()) {
+                nit->second->markSectionDirty(sy);
+                toRemesh.emplace_back(cx + 1, cz);
+            }
+        }
+        if (lz == 0) {
+            auto nit = m_chunks.find(chunkKey(cx, cz - 1));
+            if (nit != m_chunks.end()) {
+                nit->second->markSectionDirty(sy);
+                toRemesh.emplace_back(cx, cz - 1);
+            }
+        }
+        if (lz == CHUNK_SIZE - 1) {
+            auto nit = m_chunks.find(chunkKey(cx, cz + 1));
+            if (nit != m_chunks.end()) {
+                nit->second->markSectionDirty(sy);
+                toRemesh.emplace_back(cx, cz + 1);
+            }
+        }
 
-        // Sync remesh so dig/place is visible immediately
+        // Sync remesh dirty sections only so dig/place is visible immediately
         for (auto [rcx, rcz] : toRemesh) {
             auto rit = m_chunks.find(chunkKey(rcx, rcz));
             if (rit == m_chunks.end())
                 continue;
-            rit->second->buildMesh(*this);
+            rit->second->buildDirtyMeshes(*this);
         }
     }
 
-    // Drop any pending async remesh for these chunks (we already rebuilt)
+    // Drop any pending async remesh for these columns (we already rebuilt)
     {
         std::lock_guard<std::mutex> qlock(m_queueMutex);
         for (auto [rcx, rcz] : toRemesh) {
@@ -133,7 +159,7 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
     for (auto [rcx, rcz] : toRemesh) {
         auto rit = m_chunks.find(chunkKey(rcx, rcz));
         if (rit != m_chunks.end() && rit->second->hasPendingUpload())
-            rit->second->bufferMeshes();
+            rit->second->bufferPendingMeshes();
     }
     return true;
 }
@@ -144,14 +170,27 @@ void World::setWorldBlock(Chunk& chunk, int cx, int cz,
     int lz = wz - cz * CHUNK_SIZE;
     if (lx < 0 || lx >= CHUNK_SIZE) return;
     if (lz < 0 || lz >= CHUNK_SIZE) return;
-    if (wy < 0 || wy >= CHUNK_SIZE) return;
+    if (wy < 0 || wy >= WORLD_HEIGHT) return;
+    chunk.setBlock(lx, wy, lz, ChunkBlock(id));
+}
+
+void World::setDecorationBlock(Chunk& chunk, int cx, int cz,
+                                int wx, int wy, int wz, BlockId id) {
+    int lx = wx - cx * CHUNK_SIZE;
+    int lz = wz - cz * CHUNK_SIZE;
+    if (lx < 0 || lx >= CHUNK_SIZE) return;
+    if (lz < 0 || lz >= CHUNK_SIZE) return;
+    if (wy < 0 || wy >= WORLD_HEIGHT) return;
+    // Do not plant into water or replace existing solid blocks
+    if (chunk.getBlock(lx, wy, lz) != BlockId::Air)
+        return;
     chunk.setBlock(lx, wy, lz, ChunkBlock(id));
 }
 
 void World::placeOakTree(Chunk& chunk, int cx, int cz,
                           int wx, int surfY, int wz, int trunkHeight) {
     for (int ty = surfY + 1; ty <= surfY + trunkHeight; ++ty) {
-        setWorldBlock(chunk, cx, cz, wx, ty, wz, BlockId::OakBark);
+        setDecorationBlock(chunk, cx, cz, wx, ty, wz, BlockId::OakBark);
     }
 
     int topY = surfY + trunkHeight;
@@ -173,8 +212,8 @@ void World::placeOakTree(Chunk& chunk, int cx, int cz,
                     continue;
                 if (dx == 0 && dz == 0 && ly <= topY && ly > surfY)
                     continue;
-                setWorldBlock(chunk, cx, cz,
-                              wx + dx, ly, wz + dz, BlockId::OakLeaf);
+                setDecorationBlock(chunk, cx, cz,
+                                   wx + dx, ly, wz + dz, BlockId::OakLeaf);
             }
         }
     }
@@ -184,7 +223,7 @@ void World::placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz)
     int h = ((wx * 1234567) ^ (wz * 7654321)) & 0x3;
     h = std::max(1, h);
     for (int ty = surfY + 1; ty <= surfY + h; ++ty) {
-        setWorldBlock(chunk, cx, cz, wx, ty, wz, BlockId::Cactus);
+        setDecorationBlock(chunk, cx, cz, wx, ty, wz, BlockId::Cactus);
     }
 }
 
@@ -197,44 +236,54 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
 
     for (int wx = wxMin; wx <= wxMax; ++wx) {
         for (int wz = wzMin; wz <= wzMax; ++wz) {
-            BiomeType biome = m_generator.getBiome(wx, wz);
-            int surfY = m_generator.getHeight(wx, wz);
+            const BiomeType biome = m_generator.getBiome(wx, wz);
+            const int surfY = m_generator.getHeight(wx, wz);
 
-            if (m_generator.shouldPlaceTree(wx, wz)) {
-                int trunkH = m_generator.getTreeHeight(wx, wz);
+            // Surface at or below sea level is flooded — no plants
+            if (surfY < WATER_LEVEL)
+                continue;
+
+            const BlockId surface = static_cast<BlockId>(
+                m_generator.getBlock(wx, surfY, wz, surfY, biome));
+
+            // Trees: grass only (shouldPlaceTree also enforces this)
+            if (surface == BlockId::Grass && m_generator.shouldPlaceTree(wx, wz)) {
+                const int trunkH = m_generator.getTreeHeight(wx, wz);
                 placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH);
+                continue;
+            }
 
-            } else if (biome == BiomeType::Desert) {
-                int lx = wx - cx * CHUNK_SIZE;
-                int lz = wz - cz * CHUNK_SIZE;
-                if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE) {
-                    uint32_t h = static_cast<uint32_t>(wx * 198491317) ^
-                                 static_cast<uint32_t>(wz * 6542989);
-                    if ((h & 0x1F) == 0) {
-                        placeCactus(chunk, cx, cz, wx, surfY, wz);
-                    }
+            const int lx = wx - cx * CHUNK_SIZE;
+            const int lz = wz - cz * CHUNK_SIZE;
+            if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
+                continue;
 
-                    if (((h >> 5) & 0xF) == 0) {
-                        if (surfY + 1 < CHUNK_SIZE)
-                            setWorldBlock(chunk, cx, cz, wx, surfY + 1, wz,
-                                          BlockId::DeadShrub);
-                    }
+            // Cactus / dead shrub: sand edge deserts only (deep desert stays barren)
+            if (surface == BlockId::Sand && biome == BiomeType::Desert
+                && !m_generator.isDeepDesert(wx, wz)) {
+                const uint32_t h = static_cast<uint32_t>(wx * 198491317) ^
+                                   static_cast<uint32_t>(wz * 6542989);
+                if ((h & 0x3F) == 0) {          // ~1/64
+                    placeCactus(chunk, cx, cz, wx, surfY, wz);
+                } else if (((h >> 6) & 0x1F) == 0) { // ~1/32, exclusive of cactus
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::DeadShrub);
                 }
+                continue;
+            }
 
-            } else if (biome == BiomeType::Grassland) {
-                int lx = wx - cx * CHUNK_SIZE;
-                int lz = wz - cz * CHUNK_SIZE;
-                if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE
-                    && surfY > WATER_LEVEL + 1) {
-                    uint32_t h = static_cast<uint32_t>(wx * 1000003) ^
-                                 static_cast<uint32_t>(wz * 999983);
-                    if ((h & 0x7) == 0 && surfY + 1 < CHUNK_SIZE) {
-                        setWorldBlock(chunk, cx, cz, wx, surfY + 1, wz,
-                                      BlockId::TallGrass);
-                    } else if ((h & 0x1F) == 1 && surfY + 1 < CHUNK_SIZE) {
-                        setWorldBlock(chunk, cx, cz, wx, surfY + 1, wz,
-                                      BlockId::Rose);
-                    }
+            // Tall grass / flowers: grass surface only (any grass climate, incl. hills)
+            if (surface == BlockId::Grass
+                && biome == BiomeType::Grassland
+                && surfY > WATER_LEVEL) {
+                const uint32_t h = static_cast<uint32_t>(wx * 1000003) ^
+                                   static_cast<uint32_t>(wz * 999983);
+                if ((h & 0x1F) == 0) {          // ~1/32 tall grass
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::TallGrass);
+                } else if ((h & 0x7F) == 1) {   // ~1/128 rose
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::Rose);
                 }
             }
         }
@@ -244,19 +293,28 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
 void World::fillChunk(Chunk& chunk, int cx, int cz) {
     for (int bx = 0; bx < CHUNK_SIZE; ++bx) {
         for (int bz = 0; bz < CHUNK_SIZE; ++bz) {
-            int worldX = cx * CHUNK_SIZE + bx;
-            int worldZ = cz * CHUNK_SIZE + bz;
+            const int worldX = cx * CHUNK_SIZE + bx;
+            const int worldZ = cz * CHUNK_SIZE + bz;
 
-            for (int by = 0; by < CHUNK_SIZE; ++by) {
-                int blockType = m_generator.getBlock(worldX, by, worldZ);
+            // Height / biome once per column (not once per Y)
+            const int height = m_generator.getHeight(worldX, worldZ);
+            const BiomeType biome = m_generator.getBiome(worldX, worldZ);
+
+            // Only iterate solid + water range; air above sea/surface is default
+            const int yMax = std::max(height, WATER_LEVEL);
+            for (int by = 0; by <= yMax; ++by) {
+                const int blockType =
+                    m_generator.getBlock(worldX, by, worldZ, height, biome);
                 if (blockType != static_cast<int>(BlockId::Air)) {
-                    chunk.setBlock(bx, by, bz,
-                                   ChunkBlock(static_cast<BlockId>(blockType)));
+                    chunk.setBlockRaw(bx, by, bz,
+                                      ChunkBlock(static_cast<BlockId>(blockType)));
                 }
             }
         }
     }
     placeDecorations(chunk, cx, cz);
+    // Skip empty upper sections — they stay clean and never mesh
+    chunk.markNonEmptySectionsDirty();
 }
 
 void World::markMeshDirty(int cx, int cz) {
@@ -274,6 +332,30 @@ void World::markMeshDirty(int cx, int cz) {
 }
 
 void World::markNeighborsDirty(int cx, int cz) {
+    // New column appeared: only remesh neighbor sections that already have blocks
+    // (empty upper air sections have no faces that need fixing).
+    {
+        std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
+        auto selfIt = m_chunks.find(chunkKey(cx, cz));
+        const Chunk* self = (selfIt != m_chunks.end()) ? selfIt->second.get() : nullptr;
+
+        const std::pair<int, int> neighbors[] = {
+            {cx + 1, cz}, {cx - 1, cz}, {cx, cz + 1}, {cx, cz - 1}
+        };
+        for (auto [ncx, ncz] : neighbors) {
+            auto it = m_chunks.find(chunkKey(ncx, ncz));
+            if (it == m_chunks.end())
+                continue;
+            Chunk& neighbor = *it->second;
+            for (int sy = 0; sy < CHUNK_SECTIONS; ++sy) {
+                // Shared face only matters if this section has geometry on either side
+                const bool neighborHas = !neighbor.getSection(sy).isEmpty();
+                const bool selfHas = self && !self->getSection(sy).isEmpty();
+                if (neighborHas && selfHas)
+                    neighbor.markSectionDirty(sy);
+            }
+        }
+    }
     markMeshDirty(cx + 1, cz);
     markMeshDirty(cx - 1, cz);
     markMeshDirty(cx, cz + 1);
@@ -305,7 +387,6 @@ void World::enqueueMissingChunks(int centerCX, int centerCZ) {
         for (const auto& c : missing) {
             uint64_t key = chunkKey(c.cx, c.cz);
             if (m_genQueued.count(key)) continue;
-            // May race with integrate; worker/gen still fine if already loaded
             m_genQueued.insert(key);
             m_genQueue.push_back({c.cx, c.cz});
             added = true;
@@ -330,11 +411,12 @@ void World::integrateGeneratedChunks() {
     {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
         for (auto& chunk : ready) {
-            const sf::Vector3i& loc = chunk->getLocation();
-            uint64_t key = chunkKey(loc.x, loc.z);
+            const int cx = chunk->getCX();
+            const int cz = chunk->getCZ();
+            uint64_t key = chunkKey(cx, cz);
             if (m_chunks.count(key)) continue;
             m_chunks[key] = std::move(chunk);
-            inserted.emplace_back(loc.x, loc.z);
+            inserted.emplace_back(cx, cz);
         }
     }
 
@@ -361,7 +443,7 @@ void World::processMeshUploads() {
         auto it = m_chunks.find(chunkKey(c.cx, c.cz));
         if (it == m_chunks.end()) continue;
         if (it->second->hasPendingUpload()) {
-            it->second->bufferMeshes();
+            it->second->bufferPendingMeshes();
         }
     }
 }
@@ -370,9 +452,8 @@ void World::unloadDistantChunks(int centerCX, int centerCZ) {
     {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
         for (auto it = m_chunks.begin(); it != m_chunks.end(); ) {
-            const sf::Vector3i& loc = it->second->getLocation();
-            int dx = loc.x - centerCX;
-            int dz = loc.z - centerCZ;
+            const int dx = it->second->getCX() - centerCX;
+            const int dz = it->second->getCZ() - centerCZ;
             if (std::abs(dx) > UNLOAD_DISTANCE || std::abs(dz) > UNLOAD_DISTANCE) {
                 it = m_chunks.erase(it);
             } else {
@@ -430,7 +511,7 @@ void World::workerLoop() {
         }
 
         if (hasGen) {
-            auto chunk = std::make_unique<Chunk>(sf::Vector3i(genTask.cx, 0, genTask.cz));
+            auto chunk = std::make_unique<Chunk>(genTask.cx, genTask.cz);
             fillChunk(*chunk, genTask.cx, genTask.cz);
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -446,8 +527,8 @@ void World::workerLoop() {
                 auto it = m_chunks.find(chunkKey(meshTask.cx, meshTask.cz));
                 if (it == m_chunks.end()) continue;
                 chunkPtr = it->second.get();
-                // buildMesh only reads blocks + neighbors via getBlock (shared)
-                chunkPtr->buildMesh(*this);
+                // buildDirtyMeshes only reads blocks + neighbors via getBlock
+                chunkPtr->buildDirtyMeshes(*this);
             }
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -481,12 +562,13 @@ void World::Render(RenderMaster& master, const Camera& camera) {
     for (auto& [key, chunk] : m_chunks) {
         if (!chunk->hasMesh()) continue;
 
-        const sf::Vector3i& loc = chunk->getLocation();
-        if (!frustum.intersectsChunkColumn(loc.x, loc.z, CHUNK_SIZE))
+        const int cx = chunk->getCX();
+        const int cz = chunk->getCZ();
+        if (!frustum.intersectsChunkColumn(cx, cz, CHUNK_SIZE, WORLD_HEIGHT))
             continue;
 
-        const float chunkCX = (loc.x + 0.5f) * CHUNK_SIZE;
-        const float chunkCZ = (loc.z + 0.5f) * CHUNK_SIZE;
+        const float chunkCX = (cx + 0.5f) * CHUNK_SIZE;
+        const float chunkCZ = (cz + 0.5f) * CHUNK_SIZE;
         const float dx = chunkCX - camPos.x;
         const float dz = chunkCZ - camPos.z;
         const float distSq = dx * dx + dz * dz;
@@ -494,7 +576,15 @@ void World::Render(RenderMaster& master, const Camera& camera) {
         if (distSq > renderDistSq) continue;
 
         const bool drawFlora = distSq <= floraDistSq;
-        master.DrawChunk(chunk->getMeshes(), distSq, drawFlora);
+
+        for (int sy = 0; sy < CHUNK_SECTIONS; ++sy) {
+            const ChunkSection& section = chunk->getSection(sy);
+            if (!section.hasMesh() || section.isEmpty())
+                continue;
+            if (!frustum.intersectsChunkSection(cx, sy, cz, CHUNK_SIZE))
+                continue;
+            master.DrawChunk(section.getMeshes(), distSq, drawFlora);
+        }
     }
 
     lock.unlock();

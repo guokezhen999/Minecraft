@@ -9,8 +9,6 @@
 #include "ChunkRenderer.h"
 #include "../World/Chunk/ChunkMesh.h"
 
-class ChunkSection;
-
 class RenderMaster
 {
 public:

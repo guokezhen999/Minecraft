@@ -50,7 +50,7 @@ void Game::Init()
                                                "resources/shaders/basic.frag");
     ResourceManager::BlockShader->Use();
     ResourceManager::BlockShader->SetInteger("texture1", 0);
-    ResourceManager::BlockTexture = new BasicTexture("resources/textures/defaultPack.png");
+    ResourceManager::BlockTexture = new BasicTexture("resources/textures/defaultPack.png", 16);
 
     m_outlineRenderer = std::make_unique<OutlineRenderer>();
     m_crosshairRenderer = std::make_unique<CrosshairRenderer>();

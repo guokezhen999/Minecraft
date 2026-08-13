@@ -4,10 +4,9 @@
 
 #include "TextureAtlas.h"
 
-TextureAtlas::TextureAtlas(const std::string &textureFilename) : BasicTexture(textureFilename)
+TextureAtlas::TextureAtlas(const std::string &textureFilename)
+    : BasicTexture("resources/textures" + textureFilename + ".png", 16)
 {
-    std::string file = "resources/textures" + textureFilename + ".png";
-    LoadFromFile(file.c_str());
     m_imageSize = 256;
     m_individualTextureSize = 16;
 }
@@ -18,11 +17,10 @@ std::array<float, 8> TextureAtlas::GetTexture(const glm::ivec2 &coords) const
     static const float INDV_TEX_SIZE = 1.0f / TEX_PER_ROW;
     static const float PIXEL_SIZE = 1.0f / (float)m_imageSize;
 
-    float xMin = ((float)coords.x * INDV_TEX_SIZE) + 0.5f * PIXEL_SIZE;
-    float yMin = ((float)coords.y * INDV_TEX_SIZE) + 0.5f * PIXEL_SIZE;
-
-    float xMax = (xMin + INDV_TEX_SIZE) - PIXEL_SIZE;
-    float yMax = (yMin + INDV_TEX_SIZE) - PIXEL_SIZE;
+    float xMin = (float)coords.x * INDV_TEX_SIZE + PIXEL_SIZE;
+    float yMin = (float)coords.y * INDV_TEX_SIZE + PIXEL_SIZE;
+    float xMax = (float)(coords.x + 1) * INDV_TEX_SIZE - PIXEL_SIZE;
+    float yMax = (float)(coords.y + 1) * INDV_TEX_SIZE - PIXEL_SIZE;
 
     return {xMax, yMax, xMin, yMax, xMin, yMin, xMax, yMin};
 }

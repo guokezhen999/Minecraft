@@ -18,15 +18,16 @@ public:
     unsigned int Width, Height;
 
     BasicTexture() {}
-    BasicTexture(const std::string &file);
+    explicit BasicTexture(const std::string &file, int atlasTileSize = 0);
 
     ~BasicTexture();
 
-    void Generate(unsigned int width, unsigned int height, unsigned char* data);
+    void Generate(unsigned int width, unsigned int height, unsigned char* data,
+                  int atlasTileSize = 0);
     void Bind() const;
 
 
-    void LoadFromFile(const char * file);
+    void LoadFromFile(const char * file, int atlasTileSize = 0);
 
 };
 

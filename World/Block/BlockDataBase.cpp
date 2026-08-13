@@ -21,7 +21,7 @@ BlockDatabase::BlockDatabase()
     m_blocks[(int)BlockId::DeadShrub] =
             std::make_unique<DefaultBlock>("deadShrub");
 
-    TextureAtlas = ::TextureAtlas("/defaultPack");
+    atlas = TextureAtlas("/defaultPack");
 }
 
 BlockDatabase &BlockDatabase::Get()

@@ -16,7 +16,7 @@ constexpr float LIGHT_Z   = 0.65f;
 constexpr float LIGHT_BOT = 0.50f;
 } // namespace
 
-ChunkSection::ChunkSection(const sf::Vector3i& position)
+ChunkSection::ChunkSection(const glm::ivec3& position)
     : m_location(position), m_blocks(CHUNK_VOLUME, ChunkBlock(BlockId::Air)) {}
 
 ChunkSection::~ChunkSection() {
@@ -53,7 +53,7 @@ const ChunkMeshCollection& ChunkSection::getMeshes() const {
     return m_meshes;
 }
 
-const sf::Vector3i& ChunkSection::getLocation() const {
+const glm::ivec3& ChunkSection::getLocation() const {
     return m_location;
 }
 
@@ -150,9 +150,9 @@ void ChunkSection::buildMesh(const World& world) {
                     }
                 }
                 else if (meshType == BlockMeshType::X) {
-                    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-                        glm::ivec2(blockData.texSideCoords.x, blockData.texSideCoords.y));
-                    sf::Vector3i blockPos(x, y, z);
+                    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+                        blockData.texSideCoords);
+                    glm::ivec3 blockPos(x, y, z);
 
                     std::array<GLfloat, 12> face1 = {
                         0.0f, 0.0f, 0.0f,
@@ -207,9 +207,9 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
     const ChunkBlock above = getAdjacentBlock(world, x, y + 1, z);
     const float h = Water::surfaceHeight(block, above);
 
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texTopCoords.x, block.GetData().texTopCoords.y));
-    const sf::Vector3i blockPos(x, y, z);
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texTopCoords);
+    const glm::ivec3 blockPos(x, y, z);
     ChunkMesh& mesh = m_meshes.waterMesh;
 
     // Top
@@ -275,8 +275,8 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
 // ----------------------------------------------------------------------------
 
 void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texSideCoords.x, block.GetData().texSideCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texSideCoords);
     // Order: (y=0,z=1), (y=0,z=0), (y=1,z=0), (y=1,z=1)
     std::array<GLfloat, 12> face = {
         1.0f, 0.0f, 1.0f,
@@ -298,12 +298,12 @@ void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }
 
 void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texSideCoords.x, block.GetData().texSideCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texSideCoords);
     // Order: (y=0,z=0), (y=0,z=1), (y=1,z=1), (y=1,z=0)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 0.0f,
@@ -325,12 +325,12 @@ void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }
 
 void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texTopCoords.x, block.GetData().texTopCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texTopCoords);
     // Order: (-X+Z), (+X+Z), (+X-Z), (-X-Z)
     std::array<GLfloat, 12> face = {
         0.0f, 1.0f, 1.0f,
@@ -352,12 +352,12 @@ void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }
 
 void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texBottomCoords.x, block.GetData().texBottomCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texBottomCoords);
     // Order: (-X-Z), (+X-Z), (+X+Z), (-X+Z)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 0.0f,
@@ -379,12 +379,12 @@ void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }
 
 void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texSideCoords.x, block.GetData().texSideCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texSideCoords);
     // Order: (x=0,y=0), (x=1,y=0), (x=1,y=1), (x=0,y=1)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 1.0f,
@@ -406,12 +406,12 @@ void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }
 
 void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
-    auto texCoords = BlockDatabase::Get().TextureAtlas.GetTexture(
-        glm::ivec2(block.GetData().texSideCoords.x, block.GetData().texSideCoords.y));
+    auto texCoords = BlockDatabase::Get().atlas.GetTexture(
+        block.GetData().texSideCoords);
     // Order: (x=1,y=0), (x=0,y=0), (x=0,y=1), (x=1,y=1)
     std::array<GLfloat, 12> face = {
         1.0f, 0.0f, 0.0f,
@@ -433,5 +433,5 @@ void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, con
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, sf::Vector3i(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
 }

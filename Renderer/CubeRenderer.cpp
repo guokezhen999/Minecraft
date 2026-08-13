@@ -53,9 +53,9 @@ void CubeRenderer::Render(Camera *camera, glm::vec3 position)
 void CubeRenderer::initRenderData(BlockId id)
 {
     unsigned int VBO;
-    sf::Vector2i sideCoords = BlockDatabase::Get().GetData(id).GetBlockData().texSideCoords;
-    sf::Vector2i bottomCoords = BlockDatabase::Get().GetData(id).GetBlockData().texBottomCoords;
-    sf::Vector2i topCoords = BlockDatabase::Get().GetData(id).GetBlockData().texTopCoords;
+    glm::ivec2 sideCoords = BlockDatabase::Get().GetData(id).GetBlockData().texSideCoords;
+    glm::ivec2 bottomCoords = BlockDatabase::Get().GetData(id).GetBlockData().texBottomCoords;
+    glm::ivec2 topCoords = BlockDatabase::Get().GetData(id).GetBlockData().texTopCoords;
 
     float side_x_min = (float)sideCoords.x / 16.0f, side_x_max = ((float)sideCoords.x + 1) / 16.0f;
     float side_y_min = (float)sideCoords.y / 16.0f, side_y_max = ((float)sideCoords.y + 1) / 16.0f;

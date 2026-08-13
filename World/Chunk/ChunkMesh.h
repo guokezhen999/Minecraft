@@ -9,7 +9,7 @@
 
 #include <array>
 #include <vector>
-#include <SFML/Graphics.hpp>
+#include <glm/glm.hpp>
 
 class ChunkMesh {
 public:
@@ -17,13 +17,13 @@ public:
 
     void addFace(const std::array<GLfloat, 12> &blockFace,
                  const std::array<GLfloat, 8> &textureCoords,
-                 const sf::Vector3i &chunkPosition,
-                 const sf::Vector3i &blockPosition, GLfloat cardinalLight);
+                 const glm::ivec3 &chunkPosition,
+                 const glm::ivec3 &blockPosition, GLfloat cardinalLight);
 
     void addFace(const std::array<GLfloat, 12> &blockFace,
                  const std::array<GLfloat, 8> &textureCoords,
-                 const sf::Vector3i &chunkPosition,
-                 const sf::Vector3i &blockPosition,
+                 const glm::ivec3 &chunkPosition,
+                 const glm::ivec3 &blockPosition,
                  const std::array<GLfloat, 4> &vertexLights);
 
     // Drop CPU vertex data without touching GPU

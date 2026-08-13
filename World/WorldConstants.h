@@ -17,12 +17,44 @@ constexpr int CHUNK_SECTIONS = WORLD_HEIGHT / CHUNK_SIZE; // 8
 // Sea level for the taller world (roughly Minecraft-like proportion)
 constexpr int WATER_LEVEL = 62;
 
-// Climate map frequency (higher = smaller biomes).
-// ~0.008 → patches roughly 100+ blocks across.
-constexpr float BIOME_SCALE = 0.008f;
+// Climate: three uncorrelated 2D fields, each ~[-1, 1].
+constexpr float CONTINENT_SCALE = 0.004f;    // C — ocean vs land
+// Lower = larger hot/temperate/cold patches (~1/scale blocks across).
+constexpr float TEMPERATURE_SCALE = 0.003f;  // T — hot / temperate / cold
+constexpr float MOISTURE_SCALE = 0.004f;     // M — dry / wet, rivers, plants
 
-// Half-width of ocean↔land height blend in climate-noise space.
+// Ocean when C < this; land uses (T, M) for Forest / Savanna / Desert / Tundra.
+constexpr float CONTINENT_OCEAN_TH = -0.28f;
+constexpr float TEMP_HOT_TH = 0.25f;
+constexpr float TEMP_COLD_TH = -0.25f;
+
+// Half-width of climate blends (height amps, ocean↔land height).
 constexpr float BIOME_BLEND = 0.08f;
+
+// Relief multipliers after the shared plains / hills / mountains stack.
+constexpr float HILL_AMP_FOREST = 1.0f;
+constexpr float HILL_AMP_TUNDRA = 0.8f;
+constexpr float HILL_AMP_SAVANNA = 0.6f;
+constexpr float HILL_AMP_DESERT = 0.35f;
+constexpr float MOUNT_AMP_FOREST = 1.0f;
+constexpr float MOUNT_AMP_TUNDRA = 0.5f;
+constexpr float MOUNT_AMP_SAVANNA = 0.15f;
+constexpr float MOUNT_AMP_DESERT = 0.0f;
+constexpr float DUNE_HEIGHT = 2.5f;
+
+// Column fill (below the surface block).
+constexpr int SUBSOIL_LAYERS = 3;      // height-3 .. height-1
+constexpr int SANDSTONE_LAYERS = 8;    // desert: height-11 .. height-4
+
+// Rivers (ridge of salted octave noise, carved down only).
+constexpr float RIVER_SCALE = 0.0035f;
+constexpr float RIVER_WARP_SCALE = 0.012f;
+constexpr float RIVER_WARP_AMP = 28.0f;
+constexpr float RIVER_RIDGE_LO = 0.90f;
+constexpr float RIVER_RIDGE_HI = 0.97f;
+
+// Desert interiors (no cactus / dead shrub).
+constexpr float DEEP_DESERT_MOISTURE = -0.50f;
 
 // Chunk streaming
 constexpr int RENDER_DISTANCE = 10;

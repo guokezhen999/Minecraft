@@ -1,7 +1,7 @@
 //
 // TerrainGenerator.cpp
-// Climate (Ocean/Grass/Desert) picks surface material.
-// Independent relief noise adds plains ripple, rolling hills, and varied mountains.
+// Continentality / temperature / moisture pick biomes.
+// Shared relief (plains + hills + mountains) is scaled per biome, then rivers carve down.
 //
 
 #include "TerrainGenerator.h"
@@ -41,13 +41,6 @@ static float smoothstepRange(float edge0, float edge1, float x) {
     const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
-
-// Climate thresholds (no "mountain biome" — relief is separate)
-// Approximate shares on [-1,1]: ocean ~36%, grassland ~38%, desert ~26%
-static constexpr float kThOceanLand   = -0.28f;
-static constexpr float kThGrassDesert =  0.48f;
-// Deep barren desert (no cactus / dead shrub) — core of large sand seas
-static constexpr float kThDeepDesert  =  0.72f;
 
 float TerrainGenerator::valueNoise(float x, float z) const {
     int ix = static_cast<int>(std::floor(x));
@@ -103,34 +96,96 @@ float TerrainGenerator::saltedOctaveNoise(float x, float z, int octaves,
     return value / maxVal;
 }
 
-float TerrainGenerator::treeNoise(int ix, int iz) const {
-    uint32_t h = wangHash(static_cast<uint32_t>(ix * 198491317)
-                        ^ wangHash(static_cast<uint32_t>(iz * 6542989))
-                        ^ wangHash(static_cast<uint32_t>(m_seed + 999)));
-    return static_cast<float>(h) / static_cast<float>(0xFFFFFFFFu) * 2.0f - 1.0f;
+float TerrainGenerator::columnRoll(int worldX, int worldZ, uint32_t salt) const {
+    uint32_t h = wangHash(static_cast<uint32_t>(worldX * 198491317)
+                        ^ wangHash(static_cast<uint32_t>(worldZ * 6542989))
+                        ^ wangHash(static_cast<uint32_t>(m_seed) + salt));
+    return static_cast<float>(h) / static_cast<float>(0xFFFFFFFFu);
+}
+
+float TerrainGenerator::wetFactor(float moisture) {
+    return std::clamp(0.35f + 0.65f * (moisture + 1.0f) * 0.5f, 0.2f, 1.0f);
 }
 
 // ─── Constructor ─────────────────────────────────────────────────────────────
 
 TerrainGenerator::TerrainGenerator(int seed) : m_seed(seed) {}
 
-// ─── Climate (surface material) ──────────────────────────────────────────────
+// ─── Climate (C / T / M) ─────────────────────────────────────────────────────
 
-float TerrainGenerator::sampleClimateNoise(int worldX, int worldZ) const {
-    const float bx = static_cast<float>(worldX) * BIOME_SCALE;
-    const float bz = static_cast<float>(worldZ) * BIOME_SCALE;
-    return saltedValueNoise(bx, bz, 1u);
+ClimateSample TerrainGenerator::sampleClimate(int worldX, int worldZ) const {
+    const float x = static_cast<float>(worldX);
+    const float z = static_cast<float>(worldZ);
+    ClimateSample cl;
+    cl.continent = saltedOctaveNoise(
+        x * CONTINENT_SCALE, z * CONTINENT_SCALE, 4, 2.0f, 0.5f, 101u);
+    cl.temperature = saltedOctaveNoise(
+        x * TEMPERATURE_SCALE, z * TEMPERATURE_SCALE, 3, 2.0f, 0.5f, 202u);
+    cl.moisture = saltedOctaveNoise(
+        x * MOISTURE_SCALE, z * MOISTURE_SCALE, 4, 2.0f, 0.5f, 303u);
+    return cl;
+}
+
+BiomeType TerrainGenerator::biomeFromClimate(const ClimateSample& cl) {
+    if (cl.continent < CONTINENT_OCEAN_TH)
+        return BiomeType::Ocean;
+    if (cl.temperature < TEMP_COLD_TH)
+        return BiomeType::Tundra;
+    if (cl.moisture >= 0.0f)
+        return BiomeType::Forest;
+    if (cl.temperature >= TEMP_HOT_TH)
+        return BiomeType::Desert;
+    return BiomeType::Savanna;
+}
+
+TerrainGenerator::BiomeAmps TerrainGenerator::blendedAmps(const ClimateSample& cl) {
+    const float B = BIOME_BLEND;
+    const float tundraW =
+        1.0f - smoothstepRange(TEMP_COLD_TH - B, TEMP_COLD_TH + B, cl.temperature);
+    const float hotW =
+        smoothstepRange(TEMP_HOT_TH - B, TEMP_HOT_TH + B, cl.temperature);
+    const float midW = std::max(0.0f, 1.0f - tundraW - hotW);
+    const float wetW = smoothstepRange(-B, B, cl.moisture);
+    const float dryW = 1.0f - wetW;
+
+    const float forestW = (1.0f - tundraW) * wetW;
+    const float savannaW = midW * dryW;
+    const float desertW = hotW * dryW;
+
+    BiomeAmps a;
+    a.hill = forestW * HILL_AMP_FOREST
+           + tundraW * HILL_AMP_TUNDRA
+           + savannaW * HILL_AMP_SAVANNA
+           + desertW * HILL_AMP_DESERT;
+    a.mount = forestW * MOUNT_AMP_FOREST
+            + tundraW * MOUNT_AMP_TUNDRA
+            + savannaW * MOUNT_AMP_SAVANNA
+            + desertW * MOUNT_AMP_DESERT;
+    a.desert = desertW;
+    return a;
 }
 
 BiomeType TerrainGenerator::getBiome(int worldX, int worldZ) const {
-    const float n = sampleClimateNoise(worldX, worldZ);
-    if (n < kThOceanLand)   return BiomeType::Ocean;
-    if (n < kThGrassDesert) return BiomeType::Grassland;
-    return BiomeType::Desert;
+    return biomeFromClimate(sampleClimate(worldX, worldZ));
+}
+
+float TerrainGenerator::getMoisture(int worldX, int worldZ) const {
+    return sampleClimate(worldX, worldZ).moisture;
 }
 
 bool TerrainGenerator::isDeepDesert(int worldX, int worldZ) const {
-    return sampleClimateNoise(worldX, worldZ) >= kThDeepDesert;
+    const ClimateSample cl = sampleClimate(worldX, worldZ);
+    return biomeFromClimate(cl) == BiomeType::Desert
+        && cl.moisture < DEEP_DESERT_MOISTURE;
+}
+
+TerrainColumn TerrainGenerator::sampleColumn(int worldX, int worldZ) const {
+    const ClimateSample cl = sampleClimate(worldX, worldZ);
+    TerrainColumn col;
+    col.biome = biomeFromClimate(cl);
+    col.moisture = cl.moisture;
+    col.height = computeHeight(worldX, worldZ, cl);
+    return col;
 }
 
 // ─── Height ──────────────────────────────────────────────────────────────────
@@ -140,28 +195,24 @@ float TerrainGenerator::oceanHeight(float x, float z) const {
          + static_cast<float>(WATER_LEVEL) - 8.0f;
 }
 
-float TerrainGenerator::landHeight(float x, float z) const {
-    // Gentle plains ripple
-    const float plains =
-        saltedOctaveNoise(x * 0.028f, z * 0.028f, 3, 2.0f, 0.50f, 20u) * 5.0f;
+TerrainGenerator::LandRelief TerrainGenerator::sampleLandRelief(float x, float z) const {
+    LandRelief r;
 
-    // Rolling hills — common, modest height (≈0–16)
+    r.plains = saltedOctaveNoise(x * 0.028f, z * 0.028f, 3, 2.0f, 0.50f, 20u) * 5.0f;
+
     const float hillN =
         saltedOctaveNoise(x * 0.032f, z * 0.032f, 4, 2.0f, 0.55f, 30u);
     const float hillPos = std::max(0.0f, hillN);
-    const float hills = hillPos * hillPos * 16.0f;
+    r.hills = hillPos * hillPos * 16.0f;
 
-    // Mountain belt mask — large-scale, sparse (only strong peaks become ranges)
     const float mountMaskN =
         saltedOctaveNoise(x * 0.0065f, z * 0.0065f, 4, 2.0f, 0.58f, 40u);
-    const float mountMask = smoothstepRange(0.22f, 0.58f, mountMaskN);
+    r.mountMask = smoothstepRange(0.22f, 0.58f, mountMaskN);
 
-    // Ridge shape inside mountain belts
     const float ridgeBase =
         saltedOctaveNoise(x * 0.011f, z * 0.011f, 5, 2.0f, 0.58f, 50u);
     const float ridge = 1.0f - std::abs(ridgeBase);
 
-    // Per-range peak amplitude → short vs tall mountains (~18–48)
     const float peakVar =
         saltedOctaveNoise(x * 0.0035f, z * 0.0035f, 3, 2.0f, 0.50f, 60u);
     const float peakAmp = 18.0f + (peakVar * 0.5f + 0.5f) * 30.0f;
@@ -169,45 +220,82 @@ float TerrainGenerator::landHeight(float x, float z) const {
     const float detail =
         saltedOctaveNoise(x * 0.042f, z * 0.042f, 3, 2.0f, 0.45f, 70u) * 7.0f;
 
-    const float mountains = mountMask * (ridge * peakAmp + detail);
-
-    return static_cast<float>(WATER_LEVEL) + 2.0f + plains + hills + mountains;
+    r.mountains = r.mountMask * (ridge * peakAmp + detail);
+    return r;
 }
 
-int TerrainGenerator::getHeight(int worldX, int worldZ) const {
+float TerrainGenerator::riverMask(float x, float z, float landW, float mountMask,
+                                  float mountAmp, float moisture) const {
+    const float warpX =
+        saltedOctaveNoise(x * RIVER_WARP_SCALE, z * RIVER_WARP_SCALE, 3, 2.0f, 0.5f, 405u)
+        * RIVER_WARP_AMP;
+    const float warpZ =
+        saltedOctaveNoise(x * RIVER_WARP_SCALE, z * RIVER_WARP_SCALE, 3, 2.0f, 0.5f, 406u)
+        * RIVER_WARP_AMP;
+
+    const float n = saltedOctaveNoise(
+        (x + warpX) * RIVER_SCALE, (z + warpZ) * RIVER_SCALE, 4, 2.0f, 0.5f, 404u);
+    const float ridge = 1.0f - std::abs(n);
+
+    const float m01 = std::clamp((moisture + 1.0f) * 0.5f, 0.0f, 1.0f);
+    // Wet: denser / slightly wider (lower ridge threshold). Dry: almost none.
+    const float lo = lerp(0.955f, RIVER_RIDGE_LO - 0.02f, m01);
+    const float hi = lerp(0.990f, RIVER_RIDGE_HI, m01);
+    const float ridgeMask = smoothstepRange(lo, hi, ridge);
+
+    float moistureWiden = m01;
+    if (m01 < 0.18f)
+        moistureWiden *= m01 / 0.18f;
+
+    const float peakBlock = 1.0f - mountMask * mountAmp;
+    return ridgeMask * landW * peakBlock * moistureWiden;
+}
+
+int TerrainGenerator::computeHeight(int worldX, int worldZ,
+                                    const ClimateSample& cl) const {
     const float x = static_cast<float>(worldX);
     const float z = static_cast<float>(worldZ);
-    const float n = sampleClimateNoise(worldX, worldZ);
-    const float T = BIOME_BLEND;
+    const float B = BIOME_BLEND;
+    const float landW = smoothstepRange(
+        CONTINENT_OCEAN_TH - B, CONTINENT_OCEAN_TH + B, cl.continent);
 
-    // Ocean ↔ land blend only; grass/desert share the same relief stack so
-    // sand mountains and grass mountains meet without cliffs.
+    const LandRelief relief = sampleLandRelief(x, z);
+    const BiomeAmps amps = blendedAmps(cl);
+
+    const float dunes =
+        saltedOctaveNoise(x * 0.040f, z * 0.040f, 2, 2.0f, 0.4f, 80u) * DUNE_HEIGHT;
+
+    const float landH = static_cast<float>(WATER_LEVEL) + 2.0f
+                      + relief.plains
+                      + relief.hills * amps.hill
+                      + relief.mountains * amps.mount
+                      + amps.desert * dunes;
+
     float h;
-    if (n < kThOceanLand - T) {
+    if (landW <= 0.0f)
         h = oceanHeight(x, z);
-    } else if (n < kThOceanLand + T) {
-        const float t = smoothstepRange(kThOceanLand - T, kThOceanLand + T, n);
-        h = lerp(oceanHeight(x, z), landHeight(x, z), t);
-    } else {
-        h = landHeight(x, z);
-        // Tiny desert dune bias (does not create cliffs at grass↔desert)
-        if (n > kThGrassDesert - T) {
-            const float desertW = (n < kThGrassDesert + T)
-                ? smoothstepRange(kThGrassDesert - T, kThGrassDesert + T, n)
-                : 1.0f;
-            const float dunes =
-                saltedOctaveNoise(x * 0.040f, z * 0.040f, 2, 2.0f, 0.4f, 80u) * 2.5f;
-            h += desertW * dunes;
-        }
-    }
+    else if (landW >= 1.0f)
+        h = landH;
+    else
+        h = lerp(oceanHeight(x, z), landH, landW);
+
+    const float rmask = riverMask(x, z, landW, relief.mountMask, amps.mount, cl.moisture);
+    const float target = static_cast<float>(WATER_LEVEL - 1);
+    if (h > target)
+        h = lerp(h, target, rmask);
 
     return std::clamp(static_cast<int>(h), 2, WORLD_HEIGHT - 16);
 }
 
-// ─── Block (surface follows climate only) ────────────────────────────────────
+int TerrainGenerator::getHeight(int worldX, int worldZ) const {
+    return computeHeight(worldX, worldZ, sampleClimate(worldX, worldZ));
+}
+
+// ─── Block (surface follows climate; no forced beaches on grass) ─────────────
 
 int TerrainGenerator::getBlock(int worldX, int y, int worldZ) const {
-    return getBlock(worldX, y, worldZ, getHeight(worldX, worldZ), getBiome(worldX, worldZ));
+    const TerrainColumn col = sampleColumn(worldX, worldZ);
+    return getBlock(worldX, y, worldZ, col.height, col.biome);
 }
 
 int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
@@ -216,24 +304,32 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
     (void)worldZ;
 
     if (y > height) {
-        if (y <= WATER_LEVEL) return static_cast<int>(BlockId::Water);
+        if (y <= WATER_LEVEL) {
+            if (biome == BiomeType::Tundra && y == WATER_LEVEL)
+                return static_cast<int>(BlockId::Ice);
+            return static_cast<int>(BlockId::Water);
+        }
         return static_cast<int>(BlockId::Air);
     }
 
-    // Surface follows climate only (sand / grass) — never force stone peaks
     if (y == height) {
         switch (biome) {
             case BiomeType::Ocean:
             case BiomeType::Desert:
                 return static_cast<int>(BlockId::Sand);
-            case BiomeType::Grassland:
-                return (height <= WATER_LEVEL + 1)
-                    ? static_cast<int>(BlockId::Sand)
-                    : static_cast<int>(BlockId::Grass);
+            case BiomeType::Forest:
+                return static_cast<int>(BlockId::Grass);
+            case BiomeType::Savanna:
+                return static_cast<int>(BlockId::SavannaGrass);
+            case BiomeType::Tundra:
+                return static_cast<int>(BlockId::Snow);
+            default:
+                return static_cast<int>(BlockId::Grass);
         }
     }
 
-    if (y >= height - 4) {
+    // height-3 .. height-1: sand (ocean/desert) or dirt
+    if (y >= height - SUBSOIL_LAYERS) {
         switch (biome) {
             case BiomeType::Desert:
             case BiomeType::Ocean:
@@ -243,32 +339,52 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
         }
     }
 
+    // height-11 .. height-4: sandstone in desert, stone elsewhere
+    if (biome == BiomeType::Desert
+        && y >= height - SUBSOIL_LAYERS - SANDSTONE_LAYERS) {
+        return static_cast<int>(BlockId::Sandstone);
+    }
+
     return static_cast<int>(BlockId::Stone);
 }
 
 // ─── Tree placement ──────────────────────────────────────────────────────────
 
 bool TerrainGenerator::shouldPlaceTree(int worldX, int worldZ) const {
-    const BiomeType biome = getBiome(worldX, worldZ);
-    if (biome != BiomeType::Grassland)
+    return shouldPlaceTree(worldX, worldZ, sampleColumn(worldX, worldZ));
+}
+
+bool TerrainGenerator::shouldPlaceTree(int worldX, int worldZ,
+                                      const TerrainColumn& col) const {
+    if (col.height <= WATER_LEVEL)
         return false;
 
-    const int height = getHeight(worldX, worldZ);
-    if (height <= WATER_LEVEL + 1) return false;
-
-    if (getBlock(worldX, height, worldZ, height, biome)
-        != static_cast<int>(BlockId::Grass))
+    const int surface = getBlock(worldX, col.height, worldZ, col.height, col.biome);
+    float base = 0.0f;
+    if (col.biome == BiomeType::Forest && surface == static_cast<int>(BlockId::Grass))
+        base = 1.0f / 18.0f;
+    else if (col.biome == BiomeType::Savanna
+             && surface == static_cast<int>(BlockId::SavannaGrass))
+        base = 1.0f / 90.0f;
+    else
         return false;
 
-    // Sparser on taller grass hills/mountains
-    const float tn = treeNoise(worldX, worldZ);
-    if (height > WATER_LEVEL + 18)
-        return tn > 0.97f;
-    return tn > 0.94f;
+    if (col.biome == BiomeType::Forest && col.height > WATER_LEVEL + 18)
+        base *= 0.45f;
+
+    return columnRoll(worldX, worldZ, 501u) < base * wetFactor(col.moisture);
 }
 
 int TerrainGenerator::getTreeHeight(int worldX, int worldZ) const {
-    float tn = treeNoise(worldX + 3000, worldZ + 7000);
-    int h = static_cast<int>((tn + 1.0f) * 0.5f * 3.0f) + 4; // [4, 6]
-    return h;
+    return getTreeHeight(worldX, worldZ, getBiome(worldX, worldZ));
+}
+
+int TerrainGenerator::getTreeHeight(int worldX, int worldZ, BiomeType biome) const {
+    const float u = columnRoll(worldX + 3000, worldZ + 7000, 502u);
+    if (biome == BiomeType::Savanna) {
+        int h = 3 + static_cast<int>(u * 3.0f);
+        return std::min(h, 5);
+    }
+    int h = 4 + static_cast<int>(u * 3.0f);
+    return std::min(h, 6);
 }

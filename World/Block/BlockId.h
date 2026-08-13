@@ -29,6 +29,7 @@ enum class BlockId : Block_t {
     SavannaGrass,
     SavannaBark,
     SavannaLeaf,
+    SavannaTallGrass,
 
     NUM_TYPES
 };

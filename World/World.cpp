@@ -629,9 +629,10 @@ void World::setDecorationBlock(Chunk& chunk, int cx, int cz,
 }
 
 void World::placeOakTree(Chunk& chunk, int cx, int cz,
-                          int wx, int surfY, int wz, int trunkHeight) {
+                          int wx, int surfY, int wz, int trunkHeight,
+                          BlockId bark, BlockId leaf) {
     for (int ty = surfY + 1; ty <= surfY + trunkHeight; ++ty) {
-        setDecorationBlock(chunk, cx, cz, wx, ty, wz, BlockId::OakBark);
+        setDecorationBlock(chunk, cx, cz, wx, ty, wz, bark);
     }
 
     int topY = surfY + trunkHeight;
@@ -654,7 +655,7 @@ void World::placeOakTree(Chunk& chunk, int cx, int cz,
                 if (dx == 0 && dz == 0 && ly <= topY && ly > surfY)
                     continue;
                 setDecorationBlock(chunk, cx, cz,
-                                   wx + dx, ly, wz + dz, BlockId::OakLeaf);
+                                   wx + dx, ly, wz + dz, leaf);
             }
         }
     }
@@ -677,20 +678,27 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
 
     for (int wx = wxMin; wx <= wxMax; ++wx) {
         for (int wz = wzMin; wz <= wzMax; ++wz) {
-            const BiomeType biome = m_generator.getBiome(wx, wz);
-            const int surfY = m_generator.getHeight(wx, wz);
+            const TerrainColumn col = m_generator.sampleColumn(wx, wz);
+            const int surfY = col.height;
+            const BiomeType biome = col.biome;
 
-            // Surface at or below sea level is flooded — no plants
-            if (surfY < WATER_LEVEL)
+            // Trees and plants stay above the water line
+            if (surfY <= WATER_LEVEL)
                 continue;
 
             const BlockId surface = static_cast<BlockId>(
                 m_generator.getBlock(wx, surfY, wz, surfY, biome));
+            const float wet = TerrainGenerator::wetFactor(col.moisture);
 
-            // Trees: grass only (shouldPlaceTree also enforces this)
-            if (surface == BlockId::Grass && m_generator.shouldPlaceTree(wx, wz)) {
-                const int trunkH = m_generator.getTreeHeight(wx, wz);
-                placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH);
+            if (m_generator.shouldPlaceTree(wx, wz, col)) {
+                const int trunkH = m_generator.getTreeHeight(wx, wz, biome);
+                if (biome == BiomeType::Savanna) {
+                    placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH,
+                                 BlockId::SavannaBark, BlockId::SavannaLeaf);
+                } else {
+                    placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH,
+                                 BlockId::OakBark, BlockId::OakLeaf);
+                }
                 continue;
             }
 
@@ -699,32 +707,30 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
             if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
                 continue;
 
-            // Cactus / dead shrub: sand edge deserts only (deep desert stays barren)
+            // Cactus / dead shrub: desert edges only (deep desert stays barren)
             if (surface == BlockId::Sand && biome == BiomeType::Desert
-                && !m_generator.isDeepDesert(wx, wz)) {
-                const uint32_t h = static_cast<uint32_t>(wx * 198491317) ^
-                                   static_cast<uint32_t>(wz * 6542989);
-                if ((h & 0x3F) == 0) {          // ~1/64
+                && col.moisture >= DEEP_DESERT_MOISTURE) {
+                if (m_generator.columnRoll(wx, wz, 610u) < (1.0f / 64.0f) * wet) {
                     placeCactus(chunk, cx, cz, wx, surfY, wz);
-                } else if (((h >> 6) & 0x1F) == 0) { // ~1/32, exclusive of cactus
+                } else if (m_generator.columnRoll(wx, wz, 611u) < (1.0f / 32.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::DeadShrub);
                 }
                 continue;
             }
 
-            // Tall grass / flowers: grass surface only (any grass climate, incl. hills)
-            if (surface == BlockId::Grass
-                && biome == BiomeType::Grassland
-                && surfY > WATER_LEVEL) {
-                const uint32_t h = static_cast<uint32_t>(wx * 1000003) ^
-                                   static_cast<uint32_t>(wz * 999983);
-                if ((h & 0x1F) == 0) {          // ~1/32 tall grass
+            if (biome == BiomeType::Forest && surface == BlockId::Grass) {
+                if (m_generator.columnRoll(wx, wz, 620u) < (1.0f / 28.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::TallGrass);
-                } else if ((h & 0x7F) == 1) {   // ~1/128 rose
+                } else if (m_generator.columnRoll(wx, wz, 621u) < (1.0f / 120.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::Rose);
+                }
+            } else if (biome == BiomeType::Savanna && surface == BlockId::SavannaGrass) {
+                if (m_generator.columnRoll(wx, wz, 630u) < (1.0f / 48.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::SavannaTallGrass);
                 }
             }
         }
@@ -738,8 +744,9 @@ void World::fillChunk(Chunk& chunk, int cx, int cz) {
             const int worldZ = cz * CHUNK_SIZE + bz;
 
             // Height / biome once per column (not once per Y)
-            const int height = m_generator.getHeight(worldX, worldZ);
-            const BiomeType biome = m_generator.getBiome(worldX, worldZ);
+            const TerrainColumn col = m_generator.sampleColumn(worldX, worldZ);
+            const int height = col.height;
+            const BiomeType biome = col.biome;
 
             // Only iterate solid + water range; air above sea/surface is default
             const int yMax = std::max(height, WATER_LEVEL);

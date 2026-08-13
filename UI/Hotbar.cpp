@@ -14,7 +14,7 @@ Hotbar::Hotbar()
         BlockId::Dirt,
         BlockId::Grass,
         BlockId::SavannaGrass,
-        BlockId::Sand,
+        BlockId::SavannaTallGrass,
         BlockId::Sandstone,
         BlockId::Ice,
         BlockId::Snow,

@@ -74,7 +74,7 @@ BlockData::BlockData(const std::string &filename)
     if (!sawOpacity) {
         if (m_data.id == BlockId::Water)
             m_data.lightOpacity = 2;
-        else if (m_data.id == BlockId::OakLeaf)
+        else if (m_data.id == BlockId::OakLeaf || m_data.id == BlockId::SavannaLeaf)
             m_data.lightOpacity = 1;
         else if (!m_data.isOpaque || m_data.meshType == BlockMeshType::X)
             m_data.lightOpacity = 0;

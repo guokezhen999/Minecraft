@@ -120,7 +120,8 @@ private:
     int unloadDistance() const { return m_renderDistance + 2; }
     void placeDecorations(Chunk& chunk, int cx, int cz);
     void placeOakTree(Chunk& chunk, int cx, int cz,
-                      int wx, int surfY, int wz, int trunkHeight);
+                      int wx, int surfY, int wz, int trunkHeight,
+                      BlockId bark, BlockId leaf);
     void placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz);
     void setWorldBlock(Chunk& chunk, int cx, int cz,
                        int wx, int wy, int wz, BlockId id);

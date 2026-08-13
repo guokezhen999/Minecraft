@@ -4,6 +4,8 @@
 
 当前版本：**v0.1.0**（预发布）。需要 macOS + Homebrew 的 GLFW，或从 Release 下载 Apple Silicon 包。
 
+本版说明：[docs/v0.1.0/OVERALL.md](docs/v0.1.0/OVERALL.md)（光照 [LIGHTING.md](docs/v0.1.0/LIGHTING.md)、菜单与存档 [MENU_AND_SAVES.md](docs/v0.1.0/MENU_AND_SAVES.md)）。
+
 ## 功能
 
 - 16³ 区块柱、异步生成/网格、视锥裁剪

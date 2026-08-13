@@ -23,23 +23,52 @@ constexpr float CONTINENT_SCALE = 0.004f;    // C — ocean vs land
 constexpr float TEMPERATURE_SCALE = 0.003f;  // T — hot / temperate / cold
 constexpr float MOISTURE_SCALE = 0.004f;     // M — dry / wet, rivers, plants
 
-// Ocean when C < this; land uses (T, M) for Forest / Savanna / Desert / Tundra.
+// Ocean when C < this; land uses (T, M) for the 9 biomes.
 constexpr float CONTINENT_OCEAN_TH = -0.28f;
-constexpr float TEMP_HOT_TH = 0.25f;
-constexpr float TEMP_COLD_TH = -0.25f;
+
+// Four temperature bands: arctic / subarctic / temperate / tropical.
+constexpr float TEMP_ARCTIC_TH = -0.6f;
+constexpr float TEMP_SUBARCTIC_TH = -0.2f;
+constexpr float TEMP_TROPICAL_TH = 0.3f;
+
+// Moisture splits inside each temperature band (see biome matrix).
+constexpr float MOIST_TROP_DRY_TH = -0.2f;   // Desert | Savanna
+constexpr float MOIST_TROP_WET_TH = 0.4f;    // Savanna | Jungle
+constexpr float MOIST_TEMP_DRY_TH = -0.4f;   // TemperateDesert | Grassland
+constexpr float MOIST_TEMP_WET_TH = 0.2f;    // Grassland | Forest
+constexpr float MOIST_SUBARCTIC_TH = 0.0f;   // Tundra | Taiga
 
 // Half-width of climate blends (height amps, ocean↔land height).
 constexpr float BIOME_BLEND = 0.08f;
 
 // Relief multipliers after the shared plains / hills / mountains stack.
+constexpr float HILL_AMP_SNOWY_PLAINS = 0.5f;
+constexpr float MOUNT_AMP_SNOWY_PLAINS = 0.2f;
+
+constexpr float HILL_AMP_TUNDRA = 0.6f;
+constexpr float MOUNT_AMP_TUNDRA = 0.3f;
+
+constexpr float HILL_AMP_TAIGA = 0.9f;
+constexpr float MOUNT_AMP_TAIGA = 0.8f;
+
+constexpr float HILL_AMP_TEMP_DESERT = 0.4f;
+constexpr float MOUNT_AMP_TEMP_DESERT = 0.1f;
+
+constexpr float HILL_AMP_GRASSLAND = 0.5f;
+constexpr float MOUNT_AMP_GRASSLAND = 0.2f;
+
 constexpr float HILL_AMP_FOREST = 1.0f;
-constexpr float HILL_AMP_TUNDRA = 0.8f;
-constexpr float HILL_AMP_SAVANNA = 0.6f;
-constexpr float HILL_AMP_DESERT = 0.35f;
 constexpr float MOUNT_AMP_FOREST = 1.0f;
-constexpr float MOUNT_AMP_TUNDRA = 0.5f;
-constexpr float MOUNT_AMP_SAVANNA = 0.15f;
+
+constexpr float HILL_AMP_DESERT = 0.35f;
 constexpr float MOUNT_AMP_DESERT = 0.0f;
+
+constexpr float HILL_AMP_SAVANNA = 0.6f;
+constexpr float MOUNT_AMP_SAVANNA = 0.15f;
+
+constexpr float HILL_AMP_JUNGLE = 1.2f;
+constexpr float MOUNT_AMP_JUNGLE = 0.9f;
+
 constexpr float DUNE_HEIGHT = 2.5f;
 
 // Column fill (below the surface block).
@@ -59,10 +88,15 @@ constexpr float DEEP_DESERT_MOISTURE = -0.50f;
 // Chunk streaming
 constexpr int RENDER_DISTANCE = 10;
 constexpr int UNLOAD_DISTANCE = RENDER_DISTANCE + 2;
+// First load: 5×5 around the camera, then grow to render distance
+constexpr int STREAM_START_RADIUS = 2;
 
-// Main-thread GPU uploads per frame (CPU gen/mesh run on worker)
+// Main-thread GPU uploads per frame (CPU gen/mesh run on workers)
 constexpr int MAX_MESH_UPLOADS_PER_FRAME = 6;
 constexpr int MAX_CHUNKS_INTEGRATE_PER_FRAME = 3;
+// Higher budgets while the view is still filling in
+constexpr int MAX_MESH_UPLOADS_STREAMING = 12;
+constexpr int MAX_CHUNKS_INTEGRATE_STREAMING = 12;
 
 // LOD: skip flora beyond this world distance (blocks)
 constexpr float FLORA_LOD_DISTANCE = static_cast<float>(RENDER_DISTANCE * CHUNK_SIZE) * 0.55f;

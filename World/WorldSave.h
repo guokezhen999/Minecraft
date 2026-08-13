@@ -33,14 +33,14 @@ struct WorldHeader {
     float pitch = 0.0f;
     bool flying = false;
     std::array<int, Hotbar::SLOT_COUNT> hotbar{
-        static_cast<int>(BlockId::Stone),
-        static_cast<int>(BlockId::Dirt),
         static_cast<int>(BlockId::Grass),
         static_cast<int>(BlockId::SavannaGrass),
-        static_cast<int>(BlockId::Sand),
         static_cast<int>(BlockId::Sandstone),
+        static_cast<int>(BlockId::SpruceBark),
+        static_cast<int>(BlockId::JungleBark),
         static_cast<int>(BlockId::Ice),
         static_cast<int>(BlockId::Snow),
+        static_cast<int>(BlockId::Fern),
         static_cast<int>(BlockId::Torch),
     };
     int selected = 0;

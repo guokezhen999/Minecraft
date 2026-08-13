@@ -42,6 +42,12 @@ static float smoothstepRange(float edge0, float edge1, float x) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+static bool isColdBiome(BiomeType biome) {
+    return biome == BiomeType::Tundra
+        || biome == BiomeType::Taiga
+        || biome == BiomeType::SnowyPlains;
+}
+
 float TerrainGenerator::valueNoise(float x, float z) const {
     int ix = static_cast<int>(std::floor(x));
     int iz = static_cast<int>(std::floor(z));
@@ -129,39 +135,103 @@ ClimateSample TerrainGenerator::sampleClimate(int worldX, int worldZ) const {
 BiomeType TerrainGenerator::biomeFromClimate(const ClimateSample& cl) {
     if (cl.continent < CONTINENT_OCEAN_TH)
         return BiomeType::Ocean;
-    if (cl.temperature < TEMP_COLD_TH)
-        return BiomeType::Tundra;
-    if (cl.moisture >= 0.0f)
-        return BiomeType::Forest;
-    if (cl.temperature >= TEMP_HOT_TH)
-        return BiomeType::Desert;
-    return BiomeType::Savanna;
+
+    // Arctic (Coldest)
+    if (cl.temperature < TEMP_ARCTIC_TH) {
+        return BiomeType::SnowyPlains;
+    }
+
+    // Subarctic
+    if (cl.temperature < TEMP_SUBARCTIC_TH) {
+        return (cl.moisture < MOIST_SUBARCTIC_TH) ? BiomeType::Tundra
+                                                 : BiomeType::Taiga;
+    }
+
+    // Tropical (Hottest)
+    if (cl.temperature >= TEMP_TROPICAL_TH) {
+        if (cl.moisture < MOIST_TROP_DRY_TH) return BiomeType::Desert;
+        if (cl.moisture < MOIST_TROP_WET_TH) return BiomeType::Savanna;
+        return BiomeType::Jungle;
+    }
+
+    // Temperate
+    if (cl.moisture < MOIST_TEMP_DRY_TH) return BiomeType::TemperateDesert;
+    if (cl.moisture < MOIST_TEMP_WET_TH) return BiomeType::Grassland;
+    return BiomeType::Forest;
 }
 
 TerrainGenerator::BiomeAmps TerrainGenerator::blendedAmps(const ClimateSample& cl) {
+    const float T = cl.temperature;
+    const float M = cl.moisture;
     const float B = BIOME_BLEND;
-    const float tundraW =
-        1.0f - smoothstepRange(TEMP_COLD_TH - B, TEMP_COLD_TH + B, cl.temperature);
-    const float hotW =
-        smoothstepRange(TEMP_HOT_TH - B, TEMP_HOT_TH + B, cl.temperature);
-    const float midW = std::max(0.0f, 1.0f - tundraW - hotW);
-    const float wetW = smoothstepRange(-B, B, cl.moisture);
-    const float dryW = 1.0f - wetW;
 
-    const float forestW = (1.0f - tundraW) * wetW;
-    const float savannaW = midW * dryW;
-    const float desertW = hotW * dryW;
+    // Cascading temperature weights
+    const float s1 = smoothstepRange(TEMP_ARCTIC_TH - B, TEMP_ARCTIC_TH + B, T);
+    const float s2 = smoothstepRange(TEMP_SUBARCTIC_TH - B, TEMP_SUBARCTIC_TH + B, T);
+    const float s3 = smoothstepRange(TEMP_TROPICAL_TH - B, TEMP_TROPICAL_TH + B, T);
+
+    const float arcticW = 1.0f - s1;
+    const float subW    = s1 - s2;
+    const float tempW   = s2 - s3;
+    const float tropW   = s3;
+
+    // Tropical moisture weights
+    const float m_trop1 = smoothstepRange(
+        MOIST_TROP_DRY_TH - B, MOIST_TROP_DRY_TH + B, M);
+    const float m_trop2 = smoothstepRange(
+        MOIST_TROP_WET_TH - B, MOIST_TROP_WET_TH + B, M);
+    const float tropDryW = 1.0f - m_trop1;
+    const float tropMidW = m_trop1 - m_trop2;
+    const float tropWetW = m_trop2;
+
+    // Temperate moisture weights
+    const float m_temp1 = smoothstepRange(
+        MOIST_TEMP_DRY_TH - B, MOIST_TEMP_DRY_TH + B, M);
+    const float m_temp2 = smoothstepRange(
+        MOIST_TEMP_WET_TH - B, MOIST_TEMP_WET_TH + B, M);
+    const float tempDryW = 1.0f - m_temp1;
+    const float tempMidW = m_temp1 - m_temp2;
+    const float tempWetW = m_temp2;
+
+    // Subarctic moisture weights
+    const float m_sub = smoothstepRange(
+        MOIST_SUBARCTIC_TH - B, MOIST_SUBARCTIC_TH + B, M);
+    const float subDryW = 1.0f - m_sub;
+    const float subWetW = m_sub;
+
+    // Biome weights
+    const float w_snowy_plains = arcticW;
+    const float w_tundra = subW * subDryW;
+    const float w_taiga = subW * subWetW;
+    const float w_temp_desert = tempW * tempDryW;
+    const float w_grassland = tempW * tempMidW;
+    const float w_forest = tempW * tempWetW;
+    const float w_desert = tropW * tropDryW;
+    const float w_savanna = tropW * tropMidW;
+    const float w_jungle = tropW * tropWetW;
 
     BiomeAmps a;
-    a.hill = forestW * HILL_AMP_FOREST
-           + tundraW * HILL_AMP_TUNDRA
-           + savannaW * HILL_AMP_SAVANNA
-           + desertW * HILL_AMP_DESERT;
-    a.mount = forestW * MOUNT_AMP_FOREST
-            + tundraW * MOUNT_AMP_TUNDRA
-            + savannaW * MOUNT_AMP_SAVANNA
-            + desertW * MOUNT_AMP_DESERT;
-    a.desert = desertW;
+    a.hill = w_snowy_plains * HILL_AMP_SNOWY_PLAINS
+           + w_tundra * HILL_AMP_TUNDRA
+           + w_taiga * HILL_AMP_TAIGA
+           + w_temp_desert * HILL_AMP_TEMP_DESERT
+           + w_grassland * HILL_AMP_GRASSLAND
+           + w_forest * HILL_AMP_FOREST
+           + w_desert * HILL_AMP_DESERT
+           + w_savanna * HILL_AMP_SAVANNA
+           + w_jungle * HILL_AMP_JUNGLE;
+
+    a.mount = w_snowy_plains * MOUNT_AMP_SNOWY_PLAINS
+            + w_tundra * MOUNT_AMP_TUNDRA
+            + w_taiga * MOUNT_AMP_TAIGA
+            + w_temp_desert * MOUNT_AMP_TEMP_DESERT
+            + w_grassland * MOUNT_AMP_GRASSLAND
+            + w_forest * MOUNT_AMP_FOREST
+            + w_desert * MOUNT_AMP_DESERT
+            + w_savanna * MOUNT_AMP_SAVANNA
+            + w_jungle * MOUNT_AMP_JUNGLE;
+
+    a.desert = w_desert;
     return a;
 }
 
@@ -259,6 +329,12 @@ int TerrainGenerator::computeHeight(int worldX, int worldZ,
     const float landW = smoothstepRange(
         CONTINENT_OCEAN_TH - B, CONTINENT_OCEAN_TH + B, cl.continent);
 
+    // Open ocean: height is only the sea-floor field. Skip hills / rivers.
+    if (landW <= 0.0f) {
+        const float h = oceanHeight(x, z);
+        return std::clamp(static_cast<int>(h), 2, WORLD_HEIGHT - 16);
+    }
+
     const LandRelief relief = sampleLandRelief(x, z);
     const BiomeAmps amps = blendedAmps(cl);
 
@@ -271,16 +347,11 @@ int TerrainGenerator::computeHeight(int worldX, int worldZ,
                       + relief.mountains * amps.mount
                       + amps.desert * dunes;
 
-    float h;
-    if (landW <= 0.0f)
-        h = oceanHeight(x, z);
-    else if (landW >= 1.0f)
-        h = landH;
-    else
-        h = lerp(oceanHeight(x, z), landH, landW);
+    float h = (landW >= 1.0f) ? landH : lerp(oceanHeight(x, z), landH, landW);
 
     const float rmask = riverMask(x, z, landW, relief.mountMask, amps.mount, cl.moisture);
-    const float target = static_cast<float>(WATER_LEVEL - 1);
+    // Two water cells at river center so cold biomes can freeze the top and keep water below.
+    const float target = static_cast<float>(WATER_LEVEL - 2);
     if (h > target)
         h = lerp(h, target, rmask);
 
@@ -300,12 +371,10 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ) const {
 
 int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
                                int height, BiomeType biome) const {
-    (void)worldX;
-    (void)worldZ;
-
     if (y > height) {
         if (y <= WATER_LEVEL) {
-            if (biome == BiomeType::Tundra && y == WATER_LEVEL)
+            // Cold biomes: only the top water cell becomes ice
+            if (isColdBiome(biome) && y == WATER_LEVEL)
                 return static_cast<int>(BlockId::Ice);
             return static_cast<int>(BlockId::Water);
         }
@@ -317,29 +386,39 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
             case BiomeType::Ocean:
             case BiomeType::Desert:
                 return static_cast<int>(BlockId::Sand);
-            case BiomeType::Forest:
-                return static_cast<int>(BlockId::Grass);
+            case BiomeType::TemperateDesert:
+                // 60% sand, 40% stone surface
+                return (columnRoll(worldX, worldZ, 701u) < 0.6f) ?
+                       static_cast<int>(BlockId::Sand) : static_cast<int>(BlockId::Stone);
             case BiomeType::Savanna:
                 return static_cast<int>(BlockId::SavannaGrass);
             case BiomeType::Tundra:
+            case BiomeType::SnowyPlains:
                 return static_cast<int>(BlockId::Snow);
+            case BiomeType::Taiga:
+                return static_cast<int>(BlockId::TaigaGrass);
+            case BiomeType::Forest:
+            case BiomeType::Grassland:
+            case BiomeType::Jungle:
             default:
                 return static_cast<int>(BlockId::Grass);
         }
     }
 
-    // height-3 .. height-1: sand (ocean/desert) or dirt
+    // Subsoil layer (height-3 .. height-1)
     if (y >= height - SUBSOIL_LAYERS) {
         switch (biome) {
             case BiomeType::Desert:
             case BiomeType::Ocean:
                 return static_cast<int>(BlockId::Sand);
+            case BiomeType::TemperateDesert:
+                return static_cast<int>(BlockId::Stone); // Gobi: stone subsoil
             default:
                 return static_cast<int>(BlockId::Dirt);
         }
     }
 
-    // height-11 .. height-4: sandstone in desert, stone elsewhere
+    // Deep subsoil (height-11 .. height-4) in Desert
     if (biome == BiomeType::Desert
         && y >= height - SUBSOIL_LAYERS - SANDSTONE_LAYERS) {
         return static_cast<int>(BlockId::Sandstone);
@@ -366,6 +445,12 @@ bool TerrainGenerator::shouldPlaceTree(int worldX, int worldZ,
     else if (col.biome == BiomeType::Savanna
              && surface == static_cast<int>(BlockId::SavannaGrass))
         base = 1.0f / 90.0f;
+    else if (col.biome == BiomeType::Taiga && surface == static_cast<int>(BlockId::TaigaGrass))
+        base = 1.0f / 15.0f;
+    else if (col.biome == BiomeType::Jungle && surface == static_cast<int>(BlockId::Grass))
+        base = 1.0f / 22.0f;
+    else if (col.biome == BiomeType::Grassland && surface == static_cast<int>(BlockId::Grass))
+        base = 1.0f / 150.0f;
     else
         return false;
 
@@ -384,6 +469,14 @@ int TerrainGenerator::getTreeHeight(int worldX, int worldZ, BiomeType biome) con
     if (biome == BiomeType::Savanna) {
         int h = 3 + static_cast<int>(u * 3.0f);
         return std::min(h, 5);
+    }
+    if (biome == BiomeType::Jungle) {
+        int h = 8 + static_cast<int>(u * 8.0f);
+        return std::min(h, 15);
+    }
+    if (biome == BiomeType::Taiga) {
+        int h = 5 + static_cast<int>(u * 4.0f);
+        return std::min(h, 8);
     }
     int h = 4 + static_cast<int>(u * 3.0f);
     return std::min(h, 6);

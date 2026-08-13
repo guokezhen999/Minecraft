@@ -1,0 +1,26 @@
+Name
+Spruce Leaf
+
+Id
+21
+
+TexAll
+11 1
+
+Opaque
+0
+
+MeshType
+0
+
+ShaderType
+2
+
+Collidable
+1
+
+LightOpacity
+1
+
+LightEmission
+0

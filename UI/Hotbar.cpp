@@ -10,14 +10,14 @@ Hotbar::Hotbar()
 {
     // Default placeable kit (inventory deferred — hotkeys only)
     m_slots = {
-        BlockId::Stone,
-        BlockId::Dirt,
         BlockId::Grass,
         BlockId::SavannaGrass,
-        BlockId::SavannaTallGrass,
         BlockId::Sandstone,
+        BlockId::SpruceBark,
+        BlockId::JungleBark,
         BlockId::Ice,
         BlockId::Snow,
+        BlockId::TaigaGrass,
         BlockId::Torch,
     };
 }

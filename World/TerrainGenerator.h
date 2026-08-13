@@ -14,7 +14,12 @@ enum class BiomeType {
     Forest,
     Savanna,
     Desert,
-    Tundra
+    Tundra,
+    Taiga,
+    Jungle,
+    TemperateDesert,
+    Grassland,
+    SnowyPlains
 };
 
 struct ClimateSample {

@@ -28,6 +28,12 @@ BlockDatabase::BlockDatabase()
     m_blocks[(int)BlockId::SavannaBark] = std::make_unique<DefaultBlock>("savannaBark");
     m_blocks[(int)BlockId::SavannaLeaf] = std::make_unique<DefaultBlock>("savannaLeaf");
     m_blocks[(int)BlockId::SavannaTallGrass] = std::make_unique<DefaultBlock>("savannaTallGrass");
+    m_blocks[(int)BlockId::SpruceBark] = std::make_unique<DefaultBlock>("spruceBark");
+    m_blocks[(int)BlockId::SpruceLeaf] = std::make_unique<DefaultBlock>("spruceLeaf");
+    m_blocks[(int)BlockId::JungleBark] = std::make_unique<DefaultBlock>("jungleBark");
+    m_blocks[(int)BlockId::JungleLeaf] = std::make_unique<DefaultBlock>("jungleLeaf");
+    m_blocks[(int)BlockId::Fern] = std::make_unique<DefaultBlock>("fern");
+    m_blocks[(int)BlockId::TaigaGrass] = std::make_unique<DefaultBlock>("taigaGrass");
 
     atlas = TextureAtlas("/defaultPack");
 }

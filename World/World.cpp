@@ -1,5 +1,5 @@
 //
-// World.cpp – async chunk gen/mesh, frustum cull, flora LOD
+// World.cpp – async chunk gen/mesh (two workers), frustum cull, flora LOD
 // Vertical columns of ChunkSections
 //
 
@@ -18,8 +18,10 @@
 World::World(int seed, std::string savePath, int renderDistance)
     : m_generator(seed),
       m_savePath(std::move(savePath)),
-      m_renderDistance(std::clamp(renderDistance, 4, 16)) {
-    m_worker = std::thread(&World::workerLoop, this);
+      m_renderDistance(std::clamp(renderDistance, 4, 16)),
+      m_streamRadius(std::min(STREAM_START_RADIUS, m_renderDistance)) {
+    m_genWorker = std::thread(&World::genWorkerLoop, this);
+    m_meshWorker = std::thread(&World::meshWorkerLoop, this);
 }
 
 World::~World() {
@@ -28,8 +30,10 @@ World::~World() {
         m_running = false;
     }
     m_queueCv.notify_all();
-    if (m_worker.joinable())
-        m_worker.join();
+    if (m_genWorker.joinable())
+        m_genWorker.join();
+    if (m_meshWorker.joinable())
+        m_meshWorker.join();
 }
 
 int World::getSeed() const {
@@ -37,7 +41,12 @@ int World::getSeed() const {
 }
 
 void World::setRenderDistance(int distance) {
-    m_renderDistance = std::clamp(distance, 4, 16);
+    const int rd = std::clamp(distance, 4, 16);
+    if (rd == m_renderDistance)
+        return;
+    m_renderDistance = rd;
+    if (m_streamRadius > m_renderDistance)
+        m_streamRadius = m_renderDistance;
 }
 
 bool World::tryLoadColumn(Chunk& chunk, int cx, int cz) {
@@ -669,7 +678,57 @@ void World::placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz)
     }
 }
 
-void World::placeDecorations(Chunk& chunk, int cx, int cz) {
+void World::placeSpruceTree(Chunk& chunk, int cx, int cz,
+                             int wx, int surfY, int wz, int trunkHeight) {
+    for (int ty = surfY + 1; ty <= surfY + trunkHeight; ++ty) {
+        setDecorationBlock(chunk, cx, cz, wx, ty, wz, BlockId::SpruceBark);
+    }
+    int topY = surfY + trunkHeight;
+    
+    // Top tip leaf
+    setDecorationBlock(chunk, cx, cz, wx, topY + 1, wz, BlockId::SpruceLeaf);
+    
+    // Pine cone leaf layers
+    for (int dy = 0; dy >= -trunkHeight + 2; --dy) {
+        int ly = topY + dy;
+        int r = (dy % 2 == 0) ? 1 : 2;
+        for (int dx = -r; dx <= r; ++dx) {
+            for (int dz = -r; dz <= r; ++dz) {
+                if (r == 2 && std::abs(dx) == 2 && std::abs(dz) == 2)
+                    continue; // Trim corners
+                if (dx == 0 && dz == 0 && ly <= topY)
+                    continue;
+                setDecorationBlock(chunk, cx, cz, wx + dx, ly, wz + dz, BlockId::SpruceLeaf);
+            }
+        }
+    }
+}
+
+void World::placeJungleTree(Chunk& chunk, int cx, int cz,
+                             int wx, int surfY, int wz, int trunkHeight) {
+    for (int ty = surfY + 1; ty <= surfY + trunkHeight; ++ty) {
+        setDecorationBlock(chunk, cx, cz, wx, ty, wz, BlockId::JungleBark);
+    }
+    int topY = surfY + trunkHeight;
+    
+    // Spherical lush leaf dome
+    for (int dy = -2; dy <= 2; ++dy) {
+        int ly = topY + dy;
+        int r = 3 - std::abs(dy);
+        for (int dx = -r; dx <= r; ++dx) {
+            for (int dz = -r; dz <= r; ++dz) {
+                if (r >= 2 && std::abs(dx) == r && std::abs(dz) == r)
+                    continue; // Trim corners
+                if (dx == 0 && dz == 0 && ly <= topY)
+                    continue;
+                setDecorationBlock(chunk, cx, cz, wx + dx, ly, wz + dz, BlockId::JungleLeaf);
+            }
+        }
+    }
+}
+
+void World::placeDecorations(Chunk& chunk, int cx, int cz,
+                             const TerrainColumn interior[CHUNK_SIZE][CHUNK_SIZE]) {
     const int TREE_CANOPY_RADIUS = 3;
     const int wxMin = cx * CHUNK_SIZE - TREE_CANOPY_RADIUS;
     const int wxMax = cx * CHUNK_SIZE + CHUNK_SIZE - 1 + TREE_CANOPY_RADIUS;
@@ -678,7 +737,12 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
 
     for (int wx = wxMin; wx <= wxMax; ++wx) {
         for (int wz = wzMin; wz <= wzMax; ++wz) {
-            const TerrainColumn col = m_generator.sampleColumn(wx, wz);
+            const int lx = wx - cx * CHUNK_SIZE;
+            const int lz = wz - cz * CHUNK_SIZE;
+            const TerrainColumn col =
+                (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE)
+                    ? interior[lx][lz]
+                    : m_generator.sampleColumn(wx, wz);
             const int surfY = col.height;
             const BiomeType biome = col.biome;
 
@@ -691,10 +755,18 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
             const float wet = TerrainGenerator::wetFactor(col.moisture);
 
             if (m_generator.shouldPlaceTree(wx, wz, col)) {
-                const int trunkH = m_generator.getTreeHeight(wx, wz, biome);
+                int trunkH = m_generator.getTreeHeight(wx, wz, biome);
+                const int maxTrunk = WORLD_HEIGHT - surfY - 4;
+                if (maxTrunk < 3)
+                    continue;
+                trunkH = std::min(trunkH, maxTrunk);
                 if (biome == BiomeType::Savanna) {
                     placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH,
                                  BlockId::SavannaBark, BlockId::SavannaLeaf);
+                } else if (biome == BiomeType::Taiga) {
+                    placeSpruceTree(chunk, cx, cz, wx, surfY, wz, trunkH);
+                } else if (biome == BiomeType::Jungle) {
+                    placeJungleTree(chunk, cx, cz, wx, surfY, wz, trunkH);
                 } else {
                     placeOakTree(chunk, cx, cz, wx, surfY, wz, trunkH,
                                  BlockId::OakBark, BlockId::OakLeaf);
@@ -702,8 +774,6 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
                 continue;
             }
 
-            const int lx = wx - cx * CHUNK_SIZE;
-            const int lz = wz - cz * CHUNK_SIZE;
             if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
                 continue;
 
@@ -719,6 +789,26 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
                 continue;
             }
 
+            // Gobi (TemperateDesert): Dead Shrubs only (no cacti)
+            if (biome == BiomeType::TemperateDesert &&
+                (surface == BlockId::Sand || surface == BlockId::Stone)) {
+                if (m_generator.columnRoll(wx, wz, 611u) < (1.0f / 30.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::DeadShrub);
+                }
+                continue;
+            }
+
+            // Tundra: sparse Dead Shrubs
+            if (biome == BiomeType::Tundra && surface == BlockId::Snow) {
+                if (m_generator.columnRoll(wx, wz, 611u) < (1.0f / 40.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::DeadShrub);
+                }
+                continue;
+            }
+
+            // Forest
             if (biome == BiomeType::Forest && surface == BlockId::Grass) {
                 if (m_generator.columnRoll(wx, wz, 620u) < (1.0f / 28.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
@@ -727,10 +817,39 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::Rose);
                 }
-            } else if (biome == BiomeType::Savanna && surface == BlockId::SavannaGrass) {
+            }
+            // Grassland (Temperate Grassland)
+            else if (biome == BiomeType::Grassland && surface == BlockId::Grass) {
+                if (m_generator.columnRoll(wx, wz, 620u) < (1.0f / 15.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::TallGrass);
+                } else if (m_generator.columnRoll(wx, wz, 621u) < (1.0f / 60.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::Rose);
+                }
+            }
+            // Savanna
+            else if (biome == BiomeType::Savanna && surface == BlockId::SavannaGrass) {
                 if (m_generator.columnRoll(wx, wz, 630u) < (1.0f / 48.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::SavannaTallGrass);
+                }
+            }
+            // Taiga
+            else if (biome == BiomeType::Taiga && surface == BlockId::TaigaGrass) {
+                if (m_generator.columnRoll(wx, wz, 640u) < (1.0f / 20.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::Fern);
+                } else if (m_generator.columnRoll(wx, wz, 641u) < (1.0f / 40.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::DeadShrub);
+                }
+            }
+            // Jungle
+            else if (biome == BiomeType::Jungle && surface == BlockId::Grass) {
+                if (m_generator.columnRoll(wx, wz, 650u) < (1.0f / 12.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::Fern);
                 }
             }
         }
@@ -738,6 +857,7 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz) {
 }
 
 void World::fillChunk(Chunk& chunk, int cx, int cz) {
+    TerrainColumn interior[CHUNK_SIZE][CHUNK_SIZE];
     for (int bx = 0; bx < CHUNK_SIZE; ++bx) {
         for (int bz = 0; bz < CHUNK_SIZE; ++bz) {
             const int worldX = cx * CHUNK_SIZE + bx;
@@ -745,6 +865,7 @@ void World::fillChunk(Chunk& chunk, int cx, int cz) {
 
             // Height / biome once per column (not once per Y)
             const TerrainColumn col = m_generator.sampleColumn(worldX, worldZ);
+            interior[bx][bz] = col;
             const int height = col.height;
             const BiomeType biome = col.biome;
 
@@ -760,7 +881,7 @@ void World::fillChunk(Chunk& chunk, int cx, int cz) {
             }
         }
     }
-    placeDecorations(chunk, cx, cz);
+    placeDecorations(chunk, cx, cz, interior);
     LightEngine::computeColumn(chunk);
     // Skip empty upper sections — they stay clean and never mesh
     chunk.markNonEmptySectionsDirty();
@@ -776,7 +897,7 @@ void World::markMeshDirty(int cx, int cz) {
     std::lock_guard<std::mutex> qlock(m_queueMutex);
     if (m_meshQueued.insert(key).second) {
         m_meshQueue.push_back({cx, cz});
-        m_queueCv.notify_one();
+        m_queueCv.notify_all();
     }
 }
 
@@ -810,18 +931,31 @@ void World::markNeighborsDirty(int cx, int cz) {
 }
 
 void World::enqueueMissingChunks(int centerCX, int centerCZ) {
+    while (m_streamRadius < m_renderDistance &&
+           isRingClaimed(centerCX, centerCZ, m_streamRadius)) {
+        ++m_streamRadius;
+    }
+
     struct Candidate { int cx, cz, dist2; };
     std::vector<Candidate> missing;
-    missing.reserve((m_renderDistance * 2 + 1) * (m_renderDistance * 2 + 1));
+    const int r = m_streamRadius;
+    missing.reserve((r * 2 + 1) * (r * 2 + 1));
 
-    for (int dx = -m_renderDistance; dx <= m_renderDistance; ++dx) {
-        for (int dz = -m_renderDistance; dz <= m_renderDistance; ++dz) {
-            int cx = centerCX + dx;
-            int cz = centerCZ + dz;
-            if (isChunkLoaded(cx, cz)) continue;
-            missing.push_back({cx, cz, dx * dx + dz * dz});
+    {
+        std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+        for (int dx = -r; dx <= r; ++dx) {
+            for (int dz = -r; dz <= r; ++dz) {
+                const int cx = centerCX + dx;
+                const int cz = centerCZ + dz;
+                if (m_chunks.count(chunkKey(cx, cz)))
+                    continue;
+                missing.push_back({cx, cz, dx * dx + dz * dz});
+            }
         }
     }
+
+    if (missing.empty())
+        return;
 
     std::sort(missing.begin(), missing.end(),
               [](const Candidate& a, const Candidate& b) {
@@ -839,16 +973,46 @@ void World::enqueueMissingChunks(int centerCX, int centerCZ) {
             added = true;
         }
         if (added)
-            m_queueCv.notify_one();
+            m_queueCv.notify_all();
     }
 }
 
-void World::integrateGeneratedChunks() {
+bool World::isRingClaimed(int centerCX, int centerCZ, int radius) const {
+    std::vector<uint64_t> missing;
+    {
+        std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+        for (int dx = -radius; dx <= radius; ++dx) {
+            for (int dz = -radius; dz <= radius; ++dz) {
+                const uint64_t key = chunkKey(centerCX + dx, centerCZ + dz);
+                if (!m_chunks.count(key))
+                    missing.push_back(key);
+            }
+        }
+    }
+    if (missing.empty())
+        return true;
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    for (uint64_t key : missing) {
+        if (!m_genQueued.count(key))
+            return false;
+    }
+    return true;
+}
+
+bool World::isStreaming() const {
+    if (m_streamRadius < m_renderDistance)
+        return true;
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    return !m_genQueue.empty() || !m_generatedChunks.empty()
+        || !m_meshQueue.empty() || !m_uploadQueue.empty();
+}
+
+void World::integrateGeneratedChunks(int budget) {
     std::deque<std::unique_ptr<Chunk>> ready;
     {
         std::lock_guard<std::mutex> qlock(m_queueMutex);
         int n = 0;
-        while (!m_generatedChunks.empty() && n < MAX_CHUNKS_INTEGRATE_PER_FRAME) {
+        while (!m_generatedChunks.empty() && n < budget) {
             ready.push_back(std::move(m_generatedChunks.front()));
             m_generatedChunks.pop_front();
             ++n;
@@ -859,6 +1023,8 @@ void World::integrateGeneratedChunks() {
 
     std::vector<std::pair<int, int>> inserted;
     inserted.reserve(ready.size());
+    std::vector<uint64_t> readyKeys;
+    readyKeys.reserve(ready.size());
     std::vector<std::pair<int, int>> lightRemesh;
 
     {
@@ -866,13 +1032,20 @@ void World::integrateGeneratedChunks() {
         for (auto& chunk : ready) {
             const int cx = chunk->getCX();
             const int cz = chunk->getCZ();
-            uint64_t key = chunkKey(cx, cz);
+            const uint64_t key = chunkKey(cx, cz);
+            readyKeys.push_back(key);
             if (m_chunks.count(key)) continue;
             m_chunks[key] = std::move(chunk);
             inserted.emplace_back(cx, cz);
         }
         for (auto [cx, cz] : inserted)
             LightEngine::propagateFromNeighbors(*this, cx, cz, lightRemesh);
+    }
+
+    {
+        std::lock_guard<std::mutex> qlock(m_queueMutex);
+        for (uint64_t key : readyKeys)
+            m_genQueued.erase(key);
     }
 
     for (auto [cx, cz] : inserted) {
@@ -883,12 +1056,12 @@ void World::integrateGeneratedChunks() {
         markMeshDirty(rcx, rcz);
 }
 
-void World::processMeshUploads() {
+void World::processMeshUploads(int budget) {
     std::deque<ChunkCoord> uploads;
     {
         std::lock_guard<std::mutex> qlock(m_queueMutex);
         int n = 0;
-        while (!m_uploadQueue.empty() && n < MAX_MESH_UPLOADS_PER_FRAME) {
+        while (!m_uploadQueue.empty() && n < budget) {
             uploads.push_back(m_uploadQueue.front());
             m_uploadQueue.pop_front();
             ++n;
@@ -946,60 +1119,61 @@ void World::unloadDistantChunks(int centerCX, int centerCZ) {
     dropFar(m_uploadQueue, nullptr, unloadDistance());
 }
 
-void World::workerLoop() {
+void World::genWorkerLoop() {
     while (true) {
         ChunkCoord genTask{};
-        bool hasGen = false;
-        ChunkCoord meshTask{};
-        bool hasMesh = false;
-
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
             m_queueCv.wait(lock, [&] {
-                return !m_running || !m_genQueue.empty() || !m_meshQueue.empty();
+                return !m_running || !m_genQueue.empty();
             });
-            if (!m_running && m_genQueue.empty() && m_meshQueue.empty())
+            if (!m_running && m_genQueue.empty())
                 return;
-
-            // Prefer generation so the world fills in quickly
-            if (!m_genQueue.empty()) {
-                genTask = m_genQueue.front();
-                m_genQueue.pop_front();
-                m_genQueued.erase(chunkKey(genTask.cx, genTask.cz));
-                hasGen = true;
-            } else if (!m_meshQueue.empty()) {
-                meshTask = m_meshQueue.front();
-                m_meshQueue.pop_front();
-                m_meshQueued.erase(chunkKey(meshTask.cx, meshTask.cz));
-                hasMesh = true;
-            }
+            if (m_genQueue.empty())
+                continue;
+            genTask = m_genQueue.front();
+            m_genQueue.pop_front();
+            // Keep m_genQueued until integrate so the same column is not enqueued twice.
         }
 
-        if (hasGen) {
-            auto chunk = std::make_unique<Chunk>(genTask.cx, genTask.cz);
-            if (!tryLoadColumn(*chunk, genTask.cx, genTask.cz))
-                fillChunk(*chunk, genTask.cx, genTask.cz);
-            {
-                std::lock_guard<std::mutex> lock(m_queueMutex);
-                m_generatedChunks.push_back(std::move(chunk));
-            }
-            continue;
+        auto chunk = std::make_unique<Chunk>(genTask.cx, genTask.cz);
+        if (!tryLoadColumn(*chunk, genTask.cx, genTask.cz))
+            fillChunk(*chunk, genTask.cx, genTask.cz);
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_generatedChunks.push_back(std::move(chunk));
+        }
+    }
+}
+
+void World::meshWorkerLoop() {
+    while (true) {
+        ChunkCoord meshTask{};
+        {
+            std::unique_lock<std::mutex> lock(m_queueMutex);
+            m_queueCv.wait(lock, [&] {
+                return !m_running || !m_meshQueue.empty();
+            });
+            if (!m_running && m_meshQueue.empty())
+                return;
+            if (m_meshQueue.empty())
+                continue;
+            meshTask = m_meshQueue.front();
+            m_meshQueue.pop_front();
+            m_meshQueued.erase(chunkKey(meshTask.cx, meshTask.cz));
         }
 
-        if (hasMesh) {
-            Chunk* chunkPtr = nullptr;
-            {
-                std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
-                auto it = m_chunks.find(chunkKey(meshTask.cx, meshTask.cz));
-                if (it == m_chunks.end()) continue;
-                chunkPtr = it->second.get();
-                // buildDirtyMeshes only reads blocks + neighbors via getBlock
-                chunkPtr->buildDirtyMeshes(*this);
-            }
-            {
-                std::lock_guard<std::mutex> lock(m_queueMutex);
-                m_uploadQueue.push_back(meshTask);
-            }
+        {
+            std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+            auto it = m_chunks.find(chunkKey(meshTask.cx, meshTask.cz));
+            if (it == m_chunks.end())
+                continue;
+            // buildDirtyMeshes only reads blocks + neighbors via getBlock
+            it->second->buildDirtyMeshes(*this);
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_uploadQueue.push_back(meshTask);
         }
     }
 }
@@ -1010,8 +1184,11 @@ void World::Update(const glm::vec3& cameraPos) {
 
     unloadDistantChunks(centerCX, centerCZ);
     enqueueMissingChunks(centerCX, centerCZ);
-    integrateGeneratedChunks();
-    processMeshUploads();
+    const bool streaming = isStreaming();
+    integrateGeneratedChunks(streaming ? MAX_CHUNKS_INTEGRATE_STREAMING
+                                       : MAX_CHUNKS_INTEGRATE_PER_FRAME);
+    processMeshUploads(streaming ? MAX_MESH_UPLOADS_STREAMING
+                                 : MAX_MESH_UPLOADS_PER_FRAME);
     updateFluids();
 }
 

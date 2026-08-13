@@ -108,20 +108,28 @@ private:
         }
     };
 
-    void workerLoop();
+    void genWorkerLoop();
+    void meshWorkerLoop();
 
     void enqueueMissingChunks(int centerCX, int centerCZ);
-    void integrateGeneratedChunks();
-    void processMeshUploads();
+    void integrateGeneratedChunks(int budget);
+    void processMeshUploads(int budget);
     void unloadDistantChunks(int centerCX, int centerCZ);
+    bool isRingClaimed(int centerCX, int centerCZ, int radius) const;
+    bool isStreaming() const;
 
     void fillChunk(Chunk& chunk, int cx, int cz);
     bool tryLoadColumn(Chunk& chunk, int cx, int cz);
     int unloadDistance() const { return m_renderDistance + 2; }
-    void placeDecorations(Chunk& chunk, int cx, int cz);
+    void placeDecorations(Chunk& chunk, int cx, int cz,
+                          const TerrainColumn interior[CHUNK_SIZE][CHUNK_SIZE]);
     void placeOakTree(Chunk& chunk, int cx, int cz,
                       int wx, int surfY, int wz, int trunkHeight,
                       BlockId bark, BlockId leaf);
+    void placeSpruceTree(Chunk& chunk, int cx, int cz,
+                         int wx, int surfY, int wz, int trunkHeight);
+    void placeJungleTree(Chunk& chunk, int cx, int cz,
+                         int wx, int surfY, int wz, int trunkHeight);
     void placeCactus(Chunk& chunk, int cx, int cz, int wx, int surfY, int wz);
     void setWorldBlock(Chunk& chunk, int cx, int cz,
                        int wx, int wy, int wz, BlockId id);
@@ -158,6 +166,7 @@ private:
     TerrainGenerator m_generator;
     std::string m_savePath;
     int m_renderDistance = RENDER_DISTANCE;
+    int m_streamRadius = STREAM_START_RADIUS;
     uint64_t m_worldTick = 6000; // noon
 
     // Fluid update queue (main thread only)
@@ -166,7 +175,7 @@ private:
     std::unordered_set<uint64_t> m_lightDirty;
 
     // ── Worker queues ───────────────────────────────────────────────────────
-    std::mutex m_queueMutex;
+    mutable std::mutex m_queueMutex;
     std::condition_variable m_queueCv;
     std::deque<ChunkCoord> m_genQueue;
     std::unordered_set<uint64_t> m_genQueued;
@@ -177,7 +186,8 @@ private:
     std::deque<ChunkCoord> m_uploadQueue;
 
     std::atomic<bool> m_running{true};
-    std::thread m_worker;
+    std::thread m_genWorker;
+    std::thread m_meshWorker;
 };
 
 #endif //MINECRAFT_WORLD_H

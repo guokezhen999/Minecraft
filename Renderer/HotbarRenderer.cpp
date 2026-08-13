@@ -113,7 +113,7 @@ void HotbarRenderer::Render(const Hotbar& hotbar, int windowWidth, int windowHei
              0.0f, 0.0f, 1.0f, 1.0f);
 
     auto& db = BlockDatabase::Get();
-    db.TextureAtlas.Bind();
+    db.atlas.Bind();
 
     for (int i = 0; i < Hotbar::SLOT_COUNT; ++i) {
         const float x = barX + i * (slot + gap);
@@ -155,8 +155,7 @@ void HotbarRenderer::Render(const Hotbar& hotbar, int windowWidth, int windowHei
 
         const auto& data = db.GetData(id).GetBlockData();
         // Prefer side face; flora / uniform blocks look fine with side/all
-        const sf::Vector2i tex = data.texSideCoords;
-        const auto uvs = db.TextureAtlas.GetTexture(glm::ivec2(tex.x, tex.y));
+        const auto uvs = db.atlas.GetTexture(data.texSideCoords);
         // Atlas order: (xMax,yMax), (xMin,yMax), (xMin,yMin), (xMax,yMin)
         const float uMin = uvs[2];
         const float vMin = uvs[5];

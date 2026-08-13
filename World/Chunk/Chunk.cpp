@@ -7,7 +7,7 @@
 
 Chunk::Chunk(int cx, int cz) : m_cx(cx), m_cz(cz) {
     for (int sy = 0; sy < CHUNK_SECTIONS; ++sy) {
-        m_sections[sy] = std::make_unique<ChunkSection>(sf::Vector3i(cx, sy, cz));
+        m_sections[sy] = std::make_unique<ChunkSection>(glm::ivec3(cx, sy, cz));
     }
 }
 

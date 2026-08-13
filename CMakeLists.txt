@@ -6,10 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(glad/include)
 include_directories(vendor)
 
-include_directories(/opt/homebrew/Cellar/sfml/2.6.1/include)
-link_directories(/opt/homebrew/Cellar/sfml/2.6.1/lib)
-
 find_package(glfw3 3.3 REQUIRED)
+find_package(OpenGL REQUIRED)
 
 add_executable(Minecraft
         Main.cpp
@@ -18,8 +16,6 @@ add_executable(Minecraft
         Game.h
         Game.cpp
         Config.h
-        Context.h
-        Context.cpp
         Util/NonCopyable.h
         Util/NonMovable.h
         Util/Singleton.h
@@ -95,14 +91,9 @@ find_package(Threads REQUIRED)
 
 target_link_libraries(Minecraft
         glfw
-        sfml-system sfml-window sfml-graphics sfml-network
+        OpenGL::GL
         Threads::Threads
 )
-
-if (APPLE)
-    target_link_libraries(Minecraft "-framework OpenGL")
-    target_link_libraries(Minecraft "-framework GLUT")
-endif ()
 
 add_custom_command(TARGET Minecraft POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

@@ -9,7 +9,7 @@
 
 ### 已完成
 
-- SFML 窗口、OpenGL 3.3、相机（WASD + 鼠标/方向键）
+- GLFW 窗口、OpenGL 3.3、相机（WASD + 鼠标/方向键）
 - 着色器、纹理图集、方块数据（草/土/石/水/树/花草等）
 - Chunk 列（8 × 16³ Section）+ 面剔除 Mesh（solid / water / flora）
 - World：按相机加载视野 Chunk、距离裁剪渲染、按 Section 视锥剔除

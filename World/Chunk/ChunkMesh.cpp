@@ -7,8 +7,8 @@
 
 void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
                         const std::array<GLfloat, 8> &textureCoords,
-                        const sf::Vector3i &chunkPosition,
-                        const sf::Vector3i &blockPosition,
+                        const glm::ivec3 &chunkPosition,
+                        const glm::ivec3 &blockPosition,
                         GLfloat cardinalLight) {
     addFace(blockFace, textureCoords, chunkPosition, blockPosition,
             std::array<GLfloat, 4>{cardinalLight, cardinalLight,
@@ -17,8 +17,8 @@ void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
 
 void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
                         const std::array<GLfloat, 8> &textureCoords,
-                        const sf::Vector3i &chunkPosition,
-                        const sf::Vector3i &blockPosition,
+                        const glm::ivec3 &chunkPosition,
+                        const glm::ivec3 &blockPosition,
                         const std::array<GLfloat, 4> &vertexLights) {
     faces++;
     auto &vertices = m_mesh.vertexPositions;

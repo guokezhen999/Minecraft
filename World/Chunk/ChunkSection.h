@@ -10,13 +10,13 @@
 #include "../WorldConstants.h"
 
 #include <vector>
-#include <SFML/Graphics.hpp>
+#include <glm/glm.hpp>
 
 class World;
 
 class ChunkSection : public IChunk {
 public:
-    ChunkSection(const sf::Vector3i& position);
+    ChunkSection(const glm::ivec3& position);
     ~ChunkSection() override;
 
     ChunkBlock getBlock(int x, int y, int z) const override;
@@ -38,7 +38,7 @@ public:
     bool isEmpty() const { return m_nonAirCount == 0; }
 
     const ChunkMeshCollection& getMeshes() const;
-    const sf::Vector3i& getLocation() const;
+    const glm::ivec3& getLocation() const;
 
 private:
     bool outOfBounds(int x, int y, int z) const;
@@ -64,7 +64,7 @@ private:
 private:
     std::vector<ChunkBlock> m_blocks;
     ChunkMeshCollection m_meshes;
-    sf::Vector3i m_location;
+    glm::ivec3 m_location;
     bool m_hasMesh = false;
     bool m_pendingUpload = false;
     bool m_dirty = true;

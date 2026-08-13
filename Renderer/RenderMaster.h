@@ -9,6 +9,8 @@
 #include "ChunkRenderer.h"
 #include "../World/Chunk/ChunkMesh.h"
 
+#include <memory>
+
 class RenderMaster
 {
 public:

@@ -8,7 +8,6 @@
 #include "BlockId.h"
 #include "../Util/NonCopyable.h"
 
-#include <SFML/Graphics.hpp>
 #include <glm/glm.hpp>
 #include <string>
 
@@ -28,9 +27,9 @@ enum class BlockShaderType
 struct BlockDataHolder : public NonCopyable
 {
     BlockId id;
-    sf::Vector2i texTopCoords;
-    sf::Vector2i texSideCoords;
-    sf::Vector2i texBottomCoords;
+    glm::ivec2 texTopCoords;
+    glm::ivec2 texSideCoords;
+    glm::ivec2 texBottomCoords;
 
     BlockMeshType meshType;
     BlockShaderType shaderType;

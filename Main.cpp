@@ -171,8 +171,10 @@ int main()
 
         if (game.isCameraUnderwater())
             glClearColor(UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B, 1.0f);
-        else
-            glClearColor(FOG_R, FOG_G, FOG_B, 1.0f);
+        else {
+            const glm::vec3 cc = game.clearColor();
+            glClearColor(cc.r, cc.g, cc.b, 1.0f);
+        }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);

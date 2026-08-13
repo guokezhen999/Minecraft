@@ -38,6 +38,7 @@ public:
     void OnScroll(float yoffset); // hotbar cycle
 
     bool isCameraUnderwater() const { return m_cameraUnderwater; }
+    glm::vec3 clearColor() const;
 
     Camera *m_Camera;
     RenderMaster m_RenderMaster;
@@ -62,6 +63,7 @@ private:
     Hotbar m_hotbar;
     RaycastHit m_target;
     bool m_cameraUnderwater = false;
+    float m_tickAcc = 0.0f;
 };
 
 #endif //MINECRAFT_GAME_H

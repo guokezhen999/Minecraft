@@ -52,8 +52,9 @@ void Game::Init()
 
 void Game::Render(int windowWidth, int windowHeight)
 {
+    const Atmosphere atmo = m_World->getAtmosphere();
     if (m_skyRenderer)
-        m_skyRenderer->Render(*m_Camera, m_cameraUnderwater);
+        m_skyRenderer->Render(*m_Camera, m_cameraUnderwater, atmo);
 
     m_World->Render(m_RenderMaster, *m_Camera, m_cameraUnderwater);
 
@@ -74,8 +75,28 @@ void Game::Update(float deltaTime)
 
     m_cameraUnderwater = m_World->isCameraUnderwater(m_Camera->Position);
 
+    m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND);
+    if (Keys[GLFW_KEY_T])
+        m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) * 79.0f;
+    int ticks = 0;
+    while (m_tickAcc >= 1.0f) {
+        m_tickAcc -= 1.0f;
+        ++ticks;
+    }
+    if (ticks > 0)
+        m_World->advanceTime(ticks);
+
     m_World->Update(m_Camera->Position);
     updateTargetBlock();
+}
+
+glm::vec3 Game::clearColor() const
+{
+    if (m_cameraUnderwater)
+        return {UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B};
+    if (m_World)
+        return m_World->getAtmosphere().fogColor;
+    return {FOG_R, FOG_G, FOG_B};
 }
 
 glm::vec3 Game::horizontalLookDir() const

@@ -9,6 +9,7 @@
 #include "ChunkMesh.h"
 #include "../WorldConstants.h"
 
+#include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -21,6 +22,17 @@ public:
 
     ChunkBlock getBlock(int x, int y, int z) const override;
     void setBlock(int x, int y, int z, ChunkBlock block) override;
+
+    uint8_t getSkyLight(int x, int y, int z) const;
+    uint8_t getBlockLight(int x, int y, int z) const;
+    void setSkyLight(int x, int y, int z, uint8_t value);
+    void setBlockLight(int x, int y, int z, uint8_t value);
+
+    ChunkBlock getBlockRaw(int x, int y, int z) const { return m_blocks[getIndex(x, y, z)]; }
+    uint8_t skyLightRaw(int x, int y, int z) const { return m_skyLight[getIndex(x, y, z)]; }
+    uint8_t blockLightRaw(int x, int y, int z) const { return m_blockLight[getIndex(x, y, z)]; }
+    void setSkyLightRaw(int x, int y, int z, uint8_t v) { m_skyLight[getIndex(x, y, z)] = v; }
+    void setBlockLightRaw(int x, int y, int z, uint8_t v) { m_blockLight[getIndex(x, y, z)] = v; }
 
     // Build vertex data on CPU (safe on worker thread; no GL calls)
     void buildMesh(const World& world);
@@ -41,8 +53,14 @@ public:
     const glm::ivec3& getLocation() const;
 
 private:
-    bool outOfBounds(int x, int y, int z) const;
-    int getIndex(int x, int y, int z) const;
+    bool outOfBounds(int x, int y, int z) const {
+        return static_cast<unsigned>(x) >= static_cast<unsigned>(CHUNK_SIZE) ||
+               static_cast<unsigned>(y) >= static_cast<unsigned>(CHUNK_SIZE) ||
+               static_cast<unsigned>(z) >= static_cast<unsigned>(CHUNK_SIZE);
+    }
+    int getIndex(int x, int y, int z) const {
+        return y * CHUNK_AREA + z * CHUNK_SIZE + x;
+    }
 
     ChunkBlock getAdjacentBlock(const World& world, int x, int y, int z) const;
     static bool shouldDrawFaceAgainst(const ChunkBlock& neighbor);
@@ -60,9 +78,19 @@ private:
     bool occludesAO(const World& world, int x, int y, int z) const;
     static int vertexAO(bool side1, bool side2, bool corner);
     static float shadeAO(int ao, float cardinal);
+    void sampleCornerLight(const World& world,
+                           int x0, int y0, int z0,
+                           int x1, int y1, int z1,
+                           int x2, int y2, int z2,
+                           int x3, int y3, int z3,
+                           GLfloat& sky, GLfloat& block) const;
+    void sampleCellLight(const World& world, int x, int y, int z,
+                         GLfloat& sky, GLfloat& block) const;
 
 private:
     std::vector<ChunkBlock> m_blocks;
+    std::vector<uint8_t> m_skyLight;
+    std::vector<uint8_t> m_blockLight;
     ChunkMeshCollection m_meshes;
     glm::ivec3 m_location;
     bool m_hasMesh = false;

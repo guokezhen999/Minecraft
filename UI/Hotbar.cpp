@@ -18,7 +18,7 @@ Hotbar::Hotbar()
         BlockId::OakLeaf,
         BlockId::Cactus,
         BlockId::Water,
-        BlockId::Rose,
+        BlockId::Torch,
     };
 }
 

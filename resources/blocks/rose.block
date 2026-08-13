@@ -18,3 +18,9 @@ ShaderType
 
 Collidable
 0
+
+LightOpacity
+0
+
+LightEmission
+0

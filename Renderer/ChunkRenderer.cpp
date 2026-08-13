@@ -29,7 +29,8 @@ void ChunkRenderer::AddTransparent(const ChunkMesh& mesh, float distSq) {
     }
 }
 
-void ChunkRenderer::Render(const Camera& camera, bool underwater) {
+void ChunkRenderer::Render(const Camera& camera, bool underwater,
+                           const Atmosphere& atmosphere) {
     if (m_solid.empty() && m_water.empty() && m_transparent.empty()) {
         return;
     }
@@ -37,9 +38,10 @@ void ChunkRenderer::Render(const Camera& camera, bool underwater) {
     m_shader.Use();
     m_shader.SetProjectionView(camera.GetProjectionViewMatrix());
     m_shader.SetVector3f("cameraPos", camera.Position);
-    m_shader.SetVector3f("fogColor", FOG_R, FOG_G, FOG_B);
+    m_shader.SetVector3f("fogColor", atmosphere.fogColor);
     m_shader.SetFloat("fogStart", FOG_START);
     m_shader.SetFloat("fogEnd", FOG_END);
+    m_shader.SetFloat("dayFactor", atmosphere.dayFactor);
     m_shader.SetInteger("underwater", underwater ? 1 : 0);
     m_shader.SetVector3f("underwaterFogColor",
                          UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B);
@@ -59,38 +61,52 @@ void ChunkRenderer::Render(const Camera& camera, bool underwater) {
                   });
     };
 
-    auto drawTransparent = [&](std::vector<TransparentDraw>& list, int liquidPass) {
-        if (list.empty())
-            return;
-        sortBackToFront(list);
-        m_shader.SetInteger("liquidPass", liquidPass);
+    auto drawModels = [&](const std::vector<const Model*>& list) {
+        for (const auto* model : list) {
+            model->BindVAO();
+            glDrawElements(GL_TRIANGLES, model->GetIndicesCount(),
+                           GL_UNSIGNED_INT, 0);
+        }
+    };
+
+    // ── Opaque ──────────────────────────────────────────────────────────────
+    m_shader.SetInteger("liquidPass", 0);
+    glDisable(GL_BLEND);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glDepthMask(GL_TRUE);
+
+    drawModels(m_solid);
+
+    glDisable(GL_CULL_FACE);
+
+    // ── Water (need both sides underwater; no depth write) ──────────────────
+    if (!m_water.empty()) {
+        sortBackToFront(m_water);
+        m_shader.SetInteger("liquidPass", 1);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(GL_FALSE);
-        for (const auto& item : list) {
+        for (const auto& item : m_water) {
             item.model->BindVAO();
             glDrawElements(GL_TRIANGLES, item.model->GetIndicesCount(),
                            GL_UNSIGNED_INT, 0);
         }
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
-    };
-
-    // ── Opaque ──────────────────────────────────────────────────────────────
-    m_shader.SetInteger("liquidPass", 0);
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
-
-    for (const auto* model : m_solid) {
-        model->BindVAO();
-        glDrawElements(GL_TRIANGLES, model->GetIndicesCount(), GL_UNSIGNED_INT, 0);
     }
 
-    // ── Water (surface vs submerged look) ───────────────────────────────────
-    drawTransparent(m_water, 1);
-
-    // ── Flora ───────────────────────────────────────────────────────────────
-    drawTransparent(m_transparent, 0);
+    // ── Flora (alpha discard, write depth, both sides) ──────────────────────
+    if (!m_transparent.empty()) {
+        m_shader.SetInteger("liquidPass", 0);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+        for (const auto& item : m_transparent) {
+            item.model->BindVAO();
+            glDrawElements(GL_TRIANGLES, item.model->GetIndicesCount(),
+                           GL_UNSIGNED_INT, 0);
+        }
+    }
 
     glBindVertexArray(0);
     m_solid.clear();

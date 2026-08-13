@@ -3,7 +3,9 @@
 out vec4 FragColor;
 
 in vec2 TexCoords;
-in float CardinalLight;
+in float Shade;
+in float SkyLevel;
+in float BlockLevel;
 in vec3 FragPos;
 
 uniform sampler2D texture1;
@@ -11,6 +13,7 @@ uniform vec3 cameraPos;
 uniform vec3 fogColor;
 uniform float fogStart;
 uniform float fogEnd;
+uniform float dayFactor;
 
 uniform int underwater;
 uniform int liquidPass;
@@ -19,13 +22,22 @@ uniform float underwaterFogStart;
 uniform float underwaterFogEnd;
 uniform vec3 underwaterTint;
 
+float brightness(float t)
+{
+    // Milder than t² so mid-range sky (open pits, cave mouths) stays readable
+    return mix(0.08, 1.0, t * t * (2.0 - t));
+}
+
 void main()
 {
     vec4 color = texture(texture1, TexCoords);
     if (color.a == 0.0)
         discard;
 
-    vec3 lit = color.rgb * CardinalLight;
+    float skyB = brightness(SkyLevel / 15.0);
+    float blockB = brightness(BlockLevel / 15.0);
+    float light = max(skyB * dayFactor, blockB);
+    vec3 lit = color.rgb * Shade * light;
     float dist = length(FragPos - cameraPos);
     float alpha = color.a;
 

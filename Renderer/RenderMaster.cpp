@@ -46,8 +46,9 @@ void RenderMaster::DrawChunk(const ChunkMeshCollection& meshes, float distSq, bo
     }
 }
 
-void RenderMaster::FinishChunkRender(const Camera &camera, bool underwater)
+void RenderMaster::FinishChunkRender(const Camera &camera, bool underwater,
+                                     const Atmosphere& atmosphere)
 {
     ensureChunkRenderer();
-    m_chunkRenderer->Render(camera, underwater);
+    m_chunkRenderer->Render(camera, underwater, atmosphere);
 }

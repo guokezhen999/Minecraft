@@ -6,6 +6,7 @@
 #define MINECRAFT_SKYRENDERER_H
 
 #include <glad/glad.h>
+#include "../World/WorldConstants.h"
 
 class Camera;
 class Shader;
@@ -18,7 +19,7 @@ public:
     SkyRenderer(const SkyRenderer&) = delete;
     SkyRenderer& operator=(const SkyRenderer&) = delete;
 
-    void Render(const Camera& camera, bool underwater = false);
+    void Render(const Camera& camera, bool underwater, const Atmosphere& atmosphere);
 
 private:
     void init();

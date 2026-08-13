@@ -26,16 +26,20 @@ enum class BlockShaderType
 
 struct BlockDataHolder : public NonCopyable
 {
-    BlockId id;
-    glm::ivec2 texTopCoords;
-    glm::ivec2 texSideCoords;
-    glm::ivec2 texBottomCoords;
+    BlockId id = BlockId::Air;
+    glm::ivec2 texTopCoords{0, 0};
+    glm::ivec2 texSideCoords{0, 0};
+    glm::ivec2 texBottomCoords{0, 0};
 
-    BlockMeshType meshType;
-    BlockShaderType shaderType;
+    BlockMeshType meshType = BlockMeshType::Cube;
+    BlockShaderType shaderType = BlockShaderType::Chunk;
 
-    bool isOpaque;  // 是否看的到背景色
-    bool isCollidable;  // 是否可碰撞
+    bool isOpaque = true;  // 是否看的到背景色
+    bool isCollidable = true;  // 是否可碰撞
+
+    // Separate from isOpaque: leaves block sky but stay see-through
+    uint8_t lightOpacity = 15;
+    uint8_t lightEmission = 0;
 };
 
 class BlockData : public NonCopyable

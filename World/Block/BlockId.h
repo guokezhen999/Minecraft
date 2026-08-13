@@ -22,6 +22,7 @@ enum class BlockId : Block_t {
     Rose,
     TallGrass,
     DeadShrub,
+    Torch,
 
     NUM_TYPES
 };

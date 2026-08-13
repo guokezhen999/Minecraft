@@ -38,7 +38,8 @@ void SkyRenderer::init() {
     glGenVertexArrays(1, &m_vao);
 }
 
-void SkyRenderer::Render(const Camera& camera, bool underwater) {
+void SkyRenderer::Render(const Camera& camera, bool underwater,
+                         const Atmosphere& atmosphere) {
     if (!m_shader)
         return;
 
@@ -50,8 +51,8 @@ void SkyRenderer::Render(const Camera& camera, bool underwater) {
     m_shader->Use();
     m_shader->SetMatrix4f("invProjectionView", invPV);
     m_shader->SetInteger("underwater", underwater ? 1 : 0);
-    m_shader->SetVector3f("skyTop", SKY_TOP_R, SKY_TOP_G, SKY_TOP_B);
-    m_shader->SetVector3f("skyHorizon", SKY_HORIZON_R, SKY_HORIZON_G, SKY_HORIZON_B);
+    m_shader->SetVector3f("skyTop", atmosphere.skyTop);
+    m_shader->SetVector3f("skyHorizon", atmosphere.skyHorizon);
     m_shader->SetVector3f("underwaterColor",
                           UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B);
 

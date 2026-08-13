@@ -18,13 +18,16 @@ public:
     void addFace(const std::array<GLfloat, 12> &blockFace,
                  const std::array<GLfloat, 8> &textureCoords,
                  const glm::ivec3 &chunkPosition,
-                 const glm::ivec3 &blockPosition, GLfloat cardinalLight);
+                 const glm::ivec3 &blockPosition,
+                 GLfloat shade, GLfloat sky, GLfloat block);
 
     void addFace(const std::array<GLfloat, 12> &blockFace,
                  const std::array<GLfloat, 8> &textureCoords,
                  const glm::ivec3 &chunkPosition,
                  const glm::ivec3 &blockPosition,
-                 const std::array<GLfloat, 4> &vertexLights);
+                 const std::array<GLfloat, 4> &shade,
+                 const std::array<GLfloat, 4> &sky,
+                 const std::array<GLfloat, 4> &block);
 
     // Drop CPU vertex data without touching GPU
     void clearCPU();

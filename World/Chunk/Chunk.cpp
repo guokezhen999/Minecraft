@@ -29,6 +29,49 @@ ChunkBlock Chunk::getBlock(int lx, int worldY, int lz) const {
     return m_sections[sectionIndex(worldY)]->getBlock(lx, localY(worldY), lz);
 }
 
+uint8_t Chunk::getSkyLight(int lx, int worldY, int lz) const {
+    if (!validLocalXZ(lx, lz) || worldY < 0)
+        return 0;
+    if (worldY >= WORLD_HEIGHT)
+        return static_cast<uint8_t>(LIGHT_LEVEL_MAX);
+    return m_sections[sectionIndex(worldY)]->skyLightRaw(lx, localY(worldY), lz);
+}
+
+uint8_t Chunk::getBlockLight(int lx, int worldY, int lz) const {
+    if (!validLocalXZ(lx, lz) || worldY < 0 || worldY >= WORLD_HEIGHT)
+        return 0;
+    return m_sections[sectionIndex(worldY)]->blockLightRaw(lx, localY(worldY), lz);
+}
+
+void Chunk::setSkyLight(int lx, int worldY, int lz, uint8_t value) {
+    if (!validLocalXZ(lx, lz) || worldY < 0 || worldY >= WORLD_HEIGHT)
+        return;
+    m_sections[sectionIndex(worldY)]->setSkyLightRaw(lx, localY(worldY), lz, value);
+}
+
+void Chunk::setBlockLight(int lx, int worldY, int lz, uint8_t value) {
+    if (!validLocalXZ(lx, lz) || worldY < 0 || worldY >= WORLD_HEIGHT)
+        return;
+    m_sections[sectionIndex(worldY)]->setBlockLightRaw(lx, localY(worldY), lz, value);
+}
+
+void Chunk::getLights(int lx, int worldY, int lz, uint8_t& sky, uint8_t& block) const {
+    if (!validLocalXZ(lx, lz) || worldY < 0) {
+        sky = 0;
+        block = 0;
+        return;
+    }
+    if (worldY >= WORLD_HEIGHT) {
+        sky = static_cast<uint8_t>(LIGHT_LEVEL_MAX);
+        block = 0;
+        return;
+    }
+    const ChunkSection& s = *m_sections[sectionIndex(worldY)];
+    const int ly = localY(worldY);
+    sky = s.skyLightRaw(lx, ly, lz);
+    block = s.blockLightRaw(lx, ly, lz);
+}
+
 void Chunk::setBlock(int lx, int worldY, int lz, ChunkBlock block) {
     if (!validLocalXZ(lx, lz) || worldY < 0 || worldY >= WORLD_HEIGHT)
         return;

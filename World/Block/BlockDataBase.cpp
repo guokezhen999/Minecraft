@@ -20,6 +20,7 @@ BlockDatabase::BlockDatabase()
     m_blocks[(int)BlockId::Rose] = std::make_unique<DefaultBlock>("rose");
     m_blocks[(int)BlockId::DeadShrub] =
             std::make_unique<DefaultBlock>("deadShrub");
+    m_blocks[(int)BlockId::Torch] = std::make_unique<DefaultBlock>("torch");
 
     atlas = TextureAtlas("/defaultPack");
 }

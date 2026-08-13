@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "../Shaders/ChunkShader.h"
+#include "../World/WorldConstants.h"
 
 class Model;
 class ChunkMesh;
@@ -22,7 +23,7 @@ public:
     void AddTransparent(const ChunkMesh &mesh, float distSq);
 
     // Opaque pass, then back-to-front transparent pass
-    void Render(const Camera &camera, bool underwater = false);
+    void Render(const Camera &camera, bool underwater, const Atmosphere& atmosphere);
 
 private:
     struct TransparentDraw {

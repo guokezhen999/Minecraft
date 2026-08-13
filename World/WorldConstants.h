@@ -5,6 +5,8 @@
 #ifndef MINECRAFT_WORLDCONSTANTS_H
 #define MINECRAFT_WORLDCONSTANTS_H
 
+#include <glm/glm.hpp>
+
 constexpr int CHUNK_SIZE = 16, CHUNK_AREA = CHUNK_SIZE * CHUNK_SIZE,
     CHUNK_VOLUME = CHUNK_SIZE * CHUNK_AREA;
 
@@ -27,7 +29,8 @@ constexpr int RENDER_DISTANCE = 10;
 constexpr int UNLOAD_DISTANCE = RENDER_DISTANCE + 2;
 
 // Main-thread GPU uploads per frame (CPU gen/mesh run on worker)
-constexpr int MAX_MESH_UPLOADS_PER_FRAME = 8;
+constexpr int MAX_MESH_UPLOADS_PER_FRAME = 6;
+constexpr int MAX_CHUNKS_INTEGRATE_PER_FRAME = 3;
 
 // LOD: skip flora beyond this world distance (blocks)
 constexpr float FLORA_LOD_DISTANCE = static_cast<float>(RENDER_DISTANCE * CHUNK_SIZE) * 0.55f;
@@ -52,5 +55,19 @@ constexpr float UNDERWATER_FOG_R = 0.04f, UNDERWATER_FOG_G = 0.18f, UNDERWATER_F
 constexpr float UNDERWATER_FOG_START = 4.0f;
 constexpr float UNDERWATER_FOG_END = 22.0f;
 constexpr float UNDERWATER_TINT_R = 0.15f, UNDERWATER_TINT_G = 0.40f, UNDERWATER_TINT_B = 0.55f;
+
+// Lighting / day cycle
+constexpr int LIGHT_LEVEL_MAX = 15;
+constexpr int LIGHT_EDIT_RADIUS = 16;
+constexpr int DAY_LENGTH = 24000;
+constexpr int TICKS_PER_SECOND = 20;
+constexpr float NIGHT_DAY_FACTOR = 0.05f;
+
+struct Atmosphere {
+    float dayFactor = 1.0f;
+    glm::vec3 skyTop{SKY_TOP_R, SKY_TOP_G, SKY_TOP_B};
+    glm::vec3 skyHorizon{SKY_HORIZON_R, SKY_HORIZON_G, SKY_HORIZON_B};
+    glm::vec3 fogColor{FOG_R, FOG_G, FOG_B};
+};
 
 #endif //MINECRAFT_WORLDCONSTANTS_H

@@ -85,6 +85,8 @@ add_executable(Minecraft
         World/TerrainGenerator.cpp
         World/World.h
         World/World.cpp
+        World/LightEngine.h
+        World/LightEngine.cpp
 )
 
 find_package(Threads REQUIRED)

@@ -9,6 +9,7 @@
 #include "../Util/Frustum.h"
 #include "Block/BlockData.h"
 #include "Block/Water.h"
+#include "LightEngine.h"
 
 #include <cmath>
 #include <algorithm>
@@ -53,6 +54,144 @@ ChunkBlock World::getBlockLocked(int worldX, int worldY, int worldZ) const {
     return it->second->getBlock(lx, worldY, lz);
 }
 
+uint8_t World::getSkyLight(int worldX, int worldY, int worldZ) const {
+    std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+    return getSkyLightLocked(worldX, worldY, worldZ);
+}
+
+uint8_t World::getBlockLight(int worldX, int worldY, int worldZ) const {
+    std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
+    return getBlockLightLocked(worldX, worldY, worldZ);
+}
+
+uint8_t World::getSkyLightLocked(int worldX, int worldY, int worldZ) const {
+    if (worldY >= WORLD_HEIGHT)
+        return static_cast<uint8_t>(LIGHT_LEVEL_MAX);
+    if (worldY < 0)
+        return 0;
+
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end())
+        return 0;
+
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+    return it->second->getSkyLight(lx, worldY, lz);
+}
+
+uint8_t World::getBlockLightLocked(int worldX, int worldY, int worldZ) const {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT)
+        return 0;
+
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end())
+        return 0;
+
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+    return it->second->getBlockLight(lx, worldY, lz);
+}
+
+void World::getLightsLocked(int worldX, int worldY, int worldZ,
+                            uint8_t& sky, uint8_t& block) const {
+    if (worldY >= WORLD_HEIGHT) {
+        sky = static_cast<uint8_t>(LIGHT_LEVEL_MAX);
+        block = 0;
+        return;
+    }
+    if (worldY < 0) {
+        sky = 0;
+        block = 0;
+        return;
+    }
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end()) {
+        sky = 0;
+        block = 0;
+        return;
+    }
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+    it->second->getLights(lx, worldY, lz, sky, block);
+}
+
+void World::setSkyLightLocked(int worldX, int worldY, int worldZ, uint8_t value) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT)
+        return;
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end())
+        return;
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+    it->second->setSkyLight(lx, worldY, lz, value);
+}
+
+void World::setBlockLightLocked(int worldX, int worldY, int worldZ, uint8_t value) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT)
+        return;
+    const int cx = worldToChunk(worldX);
+    const int cz = worldToChunk(worldZ);
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    if (it == m_chunks.end())
+        return;
+    const int lx = worldX - cx * CHUNK_SIZE;
+    const int lz = worldZ - cz * CHUNK_SIZE;
+    it->second->setBlockLight(lx, worldY, lz, value);
+}
+
+Chunk* World::getChunkLocked(int cx, int cz) {
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    return it == m_chunks.end() ? nullptr : it->second.get();
+}
+
+const Chunk* World::getChunkLocked(int cx, int cz) const {
+    auto it = m_chunks.find(chunkKey(cx, cz));
+    return it == m_chunks.end() ? nullptr : it->second.get();
+}
+
+void World::advanceTime(int ticks) {
+    if (ticks <= 0)
+        return;
+    m_worldTick += static_cast<uint64_t>(ticks);
+}
+
+Atmosphere World::getAtmosphere() const {
+    Atmosphere atmo;
+    const int t = static_cast<int>(m_worldTick % static_cast<uint64_t>(DAY_LENGTH));
+    const float ang = (static_cast<float>(t) / static_cast<float>(DAY_LENGTH)) *
+                      6.28318530718f;
+    const float sun = std::sin(ang);
+
+    const float day01 = glm::smoothstep(-0.05f, 0.28f, sun);
+    atmo.dayFactor = glm::mix(NIGHT_DAY_FACTOR, 1.0f, day01);
+
+    float dusk = glm::clamp(1.0f - std::abs(sun) / 0.22f, 0.0f, 1.0f);
+    if (sun < 0.0f)
+        dusk *= glm::clamp(1.0f + sun / 0.18f, 0.0f, 1.0f);
+
+    const glm::vec3 dayTop(SKY_TOP_R, SKY_TOP_G, SKY_TOP_B);
+    const glm::vec3 dayHor(SKY_HORIZON_R, SKY_HORIZON_G, SKY_HORIZON_B);
+    const glm::vec3 duskTop(0.18f, 0.10f, 0.28f);
+    const glm::vec3 duskHor(0.98f, 0.42f, 0.20f);
+    const glm::vec3 nightTop(0.01f, 0.02f, 0.07f);
+    const glm::vec3 nightHor(0.04f, 0.05f, 0.12f);
+
+    atmo.skyTop = glm::mix(nightTop, dayTop, day01);
+    atmo.skyHorizon = glm::mix(nightHor, dayHor, day01);
+    atmo.skyTop = glm::mix(atmo.skyTop, duskTop, dusk * 0.85f);
+    atmo.skyHorizon = glm::mix(atmo.skyHorizon, duskHor, dusk);
+    atmo.fogColor = atmo.skyHorizon;
+    return atmo;
+}
+
 bool World::isChunkLoaded(int cx, int cz) const {
     std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
     return m_chunks.count(chunkKey(cx, cz)) > 0;
@@ -89,6 +228,8 @@ bool World::setBlock(int worldX, int worldY, int worldZ, ChunkBlock block) {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
         if (!setBlockDeferred(worldX, worldY, worldZ, block, remeshCols, true))
             return false;
+        LightEngine::updateAfterEdit(*this, worldX, worldY, worldZ, remeshCols);
+        m_lightDirty.clear();
     }
 
     remeshAndUploadColumns(remeshCols);
@@ -115,6 +256,7 @@ bool World::setBlockDeferred(int worldX, int worldY, int worldZ, ChunkBlock bloc
         return false;
 
     it->second->setBlock(lx, worldY, lz, block);
+    noteLightDirty(cx, cz);
 
     auto addRemesh = [&](int rcx, int rcz) {
         for (const auto& c : remeshCols) {
@@ -235,6 +377,8 @@ void World::updateFluids() {
             m_fluidQueued.erase(p);
             updateFluidAt(p.x, p.y, p.z, remeshCols);
         }
+        if (!remeshCols.empty())
+            flushLightUpdates(remeshCols);
     }
 
     if (!remeshCols.empty())
@@ -523,6 +667,7 @@ void World::fillChunk(Chunk& chunk, int cx, int cz) {
         }
     }
     placeDecorations(chunk, cx, cz);
+    LightEngine::computeColumn(chunk);
     // Skip empty upper sections — they stay clean and never mesh
     chunk.markNonEmptySectionsDirty();
 }
@@ -542,8 +687,7 @@ void World::markMeshDirty(int cx, int cz) {
 }
 
 void World::markNeighborsDirty(int cx, int cz) {
-    // New column appeared: only remesh neighbor sections that already have blocks
-    // (empty upper air sections have no faces that need fixing).
+    // Shared-face cull only: remesh neighbor sections that actually touch this column.
     {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
         auto selfIt = m_chunks.find(chunkKey(cx, cz));
@@ -558,7 +702,6 @@ void World::markNeighborsDirty(int cx, int cz) {
                 continue;
             Chunk& neighbor = *it->second;
             for (int sy = 0; sy < CHUNK_SECTIONS; ++sy) {
-                // Shared face only matters if this section has geometry on either side
                 const bool neighborHas = !neighbor.getSection(sy).isEmpty();
                 const bool selfHas = self && !self->getSection(sy).isEmpty();
                 if (neighborHas && selfHas)
@@ -610,13 +753,19 @@ void World::integrateGeneratedChunks() {
     std::deque<std::unique_ptr<Chunk>> ready;
     {
         std::lock_guard<std::mutex> qlock(m_queueMutex);
-        ready.swap(m_generatedChunks);
+        int n = 0;
+        while (!m_generatedChunks.empty() && n < MAX_CHUNKS_INTEGRATE_PER_FRAME) {
+            ready.push_back(std::move(m_generatedChunks.front()));
+            m_generatedChunks.pop_front();
+            ++n;
+        }
     }
 
     if (ready.empty()) return;
 
     std::vector<std::pair<int, int>> inserted;
     inserted.reserve(ready.size());
+    std::vector<std::pair<int, int>> lightRemesh;
 
     {
         std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
@@ -628,12 +777,16 @@ void World::integrateGeneratedChunks() {
             m_chunks[key] = std::move(chunk);
             inserted.emplace_back(cx, cz);
         }
+        for (auto [cx, cz] : inserted)
+            LightEngine::propagateFromNeighbors(*this, cx, cz, lightRemesh);
     }
 
     for (auto [cx, cz] : inserted) {
         markMeshDirty(cx, cz);
         markNeighborsDirty(cx, cz);
     }
+    for (auto [rcx, rcz] : lightRemesh)
+        markMeshDirty(rcx, rcz);
 }
 
 void World::processMeshUploads() {
@@ -763,8 +916,8 @@ void World::Render(RenderMaster& master, const Camera& camera, bool underwater) 
     Frustum frustum;
     frustum.update(camera.GetProjectionViewMatrix());
 
-    const float renderDist = static_cast<float>((RENDER_DISTANCE + 1) * CHUNK_SIZE);
-    const float renderDistSq = renderDist * renderDist;
+    const float fogCull = FOG_END + static_cast<float>(CHUNK_SIZE) * 1.5f;
+    const float renderDistSq = fogCull * fogCull;
     const float floraDistSq = FLORA_LOD_DISTANCE * FLORA_LOD_DISTANCE;
     const glm::vec3 camPos = camera.Position;
 
@@ -799,7 +952,7 @@ void World::Render(RenderMaster& master, const Camera& camera, bool underwater) 
     }
 
     lock.unlock();
-    master.FinishChunkRender(camera, underwater);
+    master.FinishChunkRender(camera, underwater, getAtmosphere());
 }
 
 bool World::isCameraUnderwater(const glm::vec3& eyePos) const {
@@ -809,4 +962,22 @@ bool World::isCameraUnderwater(const glm::vec3& eyePos) const {
     const ChunkBlock here = getBlock(bx, by, bz);
     const ChunkBlock above = getBlock(bx, by + 1, bz);
     return Water::isSubmerged(here, above, eyePos.y);
+}
+
+void World::noteLightDirty(int cx, int cz) {
+    m_lightDirty.insert(chunkKey(cx, cz));
+}
+
+void World::flushLightUpdates(std::vector<std::pair<int, int>>& remeshCols) {
+    if (m_lightDirty.empty())
+        return;
+    std::vector<std::pair<int, int>> cols;
+    cols.reserve(m_lightDirty.size());
+    for (uint64_t key : m_lightDirty) {
+        const int cx = static_cast<int>(static_cast<uint32_t>(key >> 32));
+        const int cz = static_cast<int>(static_cast<uint32_t>(key));
+        cols.emplace_back(cx, cz);
+    }
+    m_lightDirty.clear();
+    LightEngine::relightColumns(*this, cols, remeshCols);
 }

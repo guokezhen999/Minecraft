@@ -9,17 +9,20 @@ void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
                         const std::array<GLfloat, 8> &textureCoords,
                         const glm::ivec3 &chunkPosition,
                         const glm::ivec3 &blockPosition,
-                        GLfloat cardinalLight) {
+                        GLfloat shade, GLfloat sky, GLfloat block) {
     addFace(blockFace, textureCoords, chunkPosition, blockPosition,
-            std::array<GLfloat, 4>{cardinalLight, cardinalLight,
-                                   cardinalLight, cardinalLight});
+            std::array<GLfloat, 4>{shade, shade, shade, shade},
+            std::array<GLfloat, 4>{sky, sky, sky, sky},
+            std::array<GLfloat, 4>{block, block, block, block});
 }
 
 void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
                         const std::array<GLfloat, 8> &textureCoords,
                         const glm::ivec3 &chunkPosition,
                         const glm::ivec3 &blockPosition,
-                        const std::array<GLfloat, 4> &vertexLights) {
+                        const std::array<GLfloat, 4> &shade,
+                        const std::array<GLfloat, 4> &sky,
+                        const std::array<GLfloat, 4> &block) {
     faces++;
     auto &vertices = m_mesh.vertexPositions;
     auto &texCoords = m_mesh.textureCoords;
@@ -33,7 +36,9 @@ void ChunkMesh::addFace(const std::array<GLfloat, 12> &blockFace,
                             blockPosition.y);
         vertices.push_back(blockFace[index++] + chunkPosition.z * CHUNK_SIZE +
                             blockPosition.z);
-        m_light.push_back(vertexLights[i]);
+        m_light.push_back(shade[i]);
+        m_light.push_back(sky[i]);
+        m_light.push_back(block[i]);
     }
 
     indices.insert(indices.end(), {m_indexIndex, m_indexIndex + 1, m_indexIndex + 2,
@@ -58,7 +63,7 @@ void ChunkMesh::bufferMesh() {
     }
 
     m_model.AddData(m_mesh);
-    m_model.AddVBO(1, m_light);
+    m_model.AddVBO(3, m_light);
     clearCPU();
 }
 

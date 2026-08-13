@@ -1,32 +1,26 @@
 Name
-Cactus
+Torch
 
 Id
-8
+12
 
-TexTop
-9 0
-
-TexSide
-9 1
-
-TexBottom
-9 0
+TexAll
+0 1
 
 Opaque
-1
+0
 
 MeshType
-0
-
-ShaderType
-0
-
-Collidable
 1
 
+ShaderType
+2
+
+Collidable
+0
+
 LightOpacity
-15
+0
 
 LightEmission
-0
+14

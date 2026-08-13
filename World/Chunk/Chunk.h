@@ -9,6 +9,7 @@
 #include "../WorldConstants.h"
 
 #include <array>
+#include <cstdint>
 #include <memory>
 
 class World;
@@ -27,6 +28,12 @@ public:
     // Local XZ + world Y
     ChunkBlock getBlock(int lx, int worldY, int lz) const;
     void setBlock(int lx, int worldY, int lz, ChunkBlock block);
+
+    uint8_t getSkyLight(int lx, int worldY, int lz) const;
+    uint8_t getBlockLight(int lx, int worldY, int lz) const;
+    void setSkyLight(int lx, int worldY, int lz, uint8_t value);
+    void setBlockLight(int lx, int worldY, int lz, uint8_t value);
+    void getLights(int lx, int worldY, int lz, uint8_t& sky, uint8_t& block) const;
 
     // Like setBlock but does not mark sections dirty (bulk terrain fill)
     void setBlockRaw(int lx, int worldY, int lz, ChunkBlock block);

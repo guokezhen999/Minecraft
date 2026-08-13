@@ -8,6 +8,7 @@
 #include "CubeRenderer.h"
 #include "ChunkRenderer.h"
 #include "../World/Chunk/ChunkMesh.h"
+#include "../World/WorldConstants.h"
 
 #include <memory>
 
@@ -22,7 +23,8 @@ public:
     // Queue chunk meshes; flora optional (LOD)
     void DrawChunk(const ChunkMeshCollection& meshes, float distSq, bool drawFlora);
 
-    void FinishChunkRender(const Camera &camera, bool underwater = false);
+    void FinishChunkRender(const Camera &camera, bool underwater,
+                           const Atmosphere& atmosphere);
 
     void InitCubeRenderer();
 

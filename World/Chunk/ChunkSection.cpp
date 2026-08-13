@@ -11,13 +11,16 @@
 
 namespace {
 constexpr float LIGHT_TOP = 1.00f;
-constexpr float LIGHT_X   = 0.80f;
-constexpr float LIGHT_Z   = 0.65f;
-constexpr float LIGHT_BOT = 0.50f;
+constexpr float LIGHT_X   = 0.90f;
+constexpr float LIGHT_Z   = 0.82f;
+constexpr float LIGHT_BOT = 0.72f;
 } // namespace
 
 ChunkSection::ChunkSection(const glm::ivec3& position)
-    : m_location(position), m_blocks(CHUNK_VOLUME, ChunkBlock(BlockId::Air)) {}
+    : m_location(position),
+      m_blocks(CHUNK_VOLUME, ChunkBlock(BlockId::Air)),
+      m_skyLight(CHUNK_VOLUME, static_cast<uint8_t>(LIGHT_LEVEL_MAX)),
+      m_blockLight(CHUNK_VOLUME, 0) {}
 
 ChunkSection::~ChunkSection() {
     m_meshes.solidMesh.deleteData();
@@ -49,22 +52,36 @@ void ChunkSection::setBlock(int x, int y, int z, ChunkBlock block) {
     m_blocks[idx] = block;
 }
 
+uint8_t ChunkSection::getSkyLight(int x, int y, int z) const {
+    if (outOfBounds(x, y, z))
+        return 0;
+    return m_skyLight[getIndex(x, y, z)];
+}
+
+uint8_t ChunkSection::getBlockLight(int x, int y, int z) const {
+    if (outOfBounds(x, y, z))
+        return 0;
+    return m_blockLight[getIndex(x, y, z)];
+}
+
+void ChunkSection::setSkyLight(int x, int y, int z, uint8_t value) {
+    if (outOfBounds(x, y, z))
+        return;
+    m_skyLight[getIndex(x, y, z)] = value;
+}
+
+void ChunkSection::setBlockLight(int x, int y, int z, uint8_t value) {
+    if (outOfBounds(x, y, z))
+        return;
+    m_blockLight[getIndex(x, y, z)] = value;
+}
+
 const ChunkMeshCollection& ChunkSection::getMeshes() const {
     return m_meshes;
 }
 
 const glm::ivec3& ChunkSection::getLocation() const {
     return m_location;
-}
-
-bool ChunkSection::outOfBounds(int x, int y, int z) const {
-    return x < 0 || x >= CHUNK_SIZE ||
-           y < 0 || y >= CHUNK_SIZE ||
-           z < 0 || z >= CHUNK_SIZE;
-}
-
-int ChunkSection::getIndex(int x, int y, int z) const {
-    return y * CHUNK_AREA + z * CHUNK_SIZE + x;
 }
 
 ChunkBlock ChunkSection::getAdjacentBlock(const World& world, int x, int y, int z) const {
@@ -94,9 +111,74 @@ int ChunkSection::vertexAO(bool side1, bool side2, bool corner) {
 }
 
 float ChunkSection::shadeAO(int ao, float cardinal) {
-    // ao ∈ [0,3] → darker in corners / between adjacent solids
-    static constexpr float kTable[4] = {0.55f, 0.72f, 0.86f, 1.0f};
+    // ao ∈ [0,3] → milder corner darkening so small holes stay readable
+    static constexpr float kTable[4] = {0.78f, 0.86f, 0.94f, 1.0f};
     return kTable[ao] * cardinal;
+}
+
+void ChunkSection::sampleCornerLight(const World& world,
+                                     int x0, int y0, int z0,
+                                     int x1, int y1, int z1,
+                                     int x2, int y2, int z2,
+                                     int x3, int y3, int z3,
+                                     GLfloat& sky, GLfloat& block) const {
+    const int ox = m_location.x * CHUNK_SIZE;
+    const int oy = m_location.y * CHUNK_SIZE;
+    const int oz = m_location.z * CHUNK_SIZE;
+    const int xs[4] = {x0, x1, x2, x3};
+    const int ys[4] = {y0, y1, y2, y3};
+    const int zs[4] = {z0, z1, z2, z3};
+
+    auto readLight = [&](int x, int y, int z, uint8_t& s, uint8_t& b) {
+        if (static_cast<unsigned>(x) < static_cast<unsigned>(CHUNK_SIZE) &&
+            static_cast<unsigned>(y) < static_cast<unsigned>(CHUNK_SIZE) &&
+            static_cast<unsigned>(z) < static_cast<unsigned>(CHUNK_SIZE)) {
+            const int idx = getIndex(x, y, z);
+            s = m_skyLight[idx];
+            b = m_blockLight[idx];
+        } else {
+            world.getLightsLocked(ox + x, oy + y, oz + z, s, b);
+        }
+    };
+
+    uint8_t fbSky = 0, fbBlock = 0;
+    readLight(x0, y0, z0, fbSky, fbBlock);
+
+    float sk = 0.0f;
+    float bl = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+        const ChunkBlock nb = getAdjacentBlock(world, xs[i], ys[i], zs[i]);
+        // Solid interiors are 0; averaging them in makes 1×1 pits almost black.
+        if (nb != BlockId::Air && nb.GetData().isOpaque) {
+            sk += static_cast<float>(fbSky);
+            bl += static_cast<float>(fbBlock);
+            continue;
+        }
+        uint8_t s = 0, b = 0;
+        readLight(xs[i], ys[i], zs[i], s, b);
+        sk += static_cast<float>(s);
+        bl += static_cast<float>(b);
+    }
+    sky = sk * 0.25f;
+    block = bl * 0.25f;
+}
+
+void ChunkSection::sampleCellLight(const World& world, int x, int y, int z,
+                                   GLfloat& sky, GLfloat& block) const {
+    if (static_cast<unsigned>(x) < static_cast<unsigned>(CHUNK_SIZE) &&
+        static_cast<unsigned>(y) < static_cast<unsigned>(CHUNK_SIZE) &&
+        static_cast<unsigned>(z) < static_cast<unsigned>(CHUNK_SIZE)) {
+        const int idx = getIndex(x, y, z);
+        sky = static_cast<float>(m_skyLight[idx]);
+        block = static_cast<float>(m_blockLight[idx]);
+        return;
+    }
+    uint8_t s = 0, b = 0;
+    world.getLightsLocked(m_location.x * CHUNK_SIZE + x,
+                          m_location.y * CHUNK_SIZE + y,
+                          m_location.z * CHUNK_SIZE + z, s, b);
+    sky = static_cast<float>(s);
+    block = static_cast<float>(b);
 }
 
 void ChunkSection::buildMesh(const World& world) {
@@ -153,6 +235,8 @@ void ChunkSection::buildMesh(const World& world) {
                     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
                         blockData.texSideCoords);
                     glm::ivec3 blockPos(x, y, z);
+                    GLfloat sky = 0.0f, blockL = 0.0f;
+                    sampleCellLight(world, x, y, z, sky, blockL);
 
                     std::array<GLfloat, 12> face1 = {
                         0.0f, 0.0f, 0.0f,
@@ -160,7 +244,8 @@ void ChunkSection::buildMesh(const World& world) {
                         1.0f, 1.0f, 1.0f,
                         0.0f, 1.0f, 0.0f,
                     };
-                    m_meshes.floraMesh.addFace(face1, texCoords, m_location, blockPos, LIGHT_TOP);
+                    m_meshes.floraMesh.addFace(face1, texCoords, m_location, blockPos,
+                                               LIGHT_TOP, sky, blockL);
 
                     std::array<GLfloat, 12> face2 = {
                         0.0f, 0.0f, 1.0f,
@@ -168,7 +253,8 @@ void ChunkSection::buildMesh(const World& world) {
                         1.0f, 1.0f, 0.0f,
                         0.0f, 1.0f, 1.0f,
                     };
-                    m_meshes.floraMesh.addFace(face2, texCoords, m_location, blockPos, LIGHT_TOP);
+                    m_meshes.floraMesh.addFace(face2, texCoords, m_location, blockPos,
+                                               LIGHT_TOP, sky, blockL);
                 }
             }
         }
@@ -211,6 +297,7 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
         block.GetData().texTopCoords);
     const glm::ivec3 blockPos(x, y, z);
     ChunkMesh& mesh = m_meshes.waterMesh;
+    GLfloat sky = 0.0f, blockL = 0.0f;
 
     // Top
     if (!Water::isWater(above)) {
@@ -220,7 +307,8 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
             1.0f, h, 0.0f,
             0.0f, h, 0.0f,
         };
-        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_TOP);
+        sampleCellLight(world, x, y + 1, z, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_TOP, sky, blockL);
     }
 
     // Bottom
@@ -232,13 +320,15 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
             1.0f, 0.0f, 1.0f,
             0.0f, 0.0f, 1.0f,
         };
-        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_BOT);
+        sampleCellLight(world, x, y - 1, z, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_BOT, sky, blockL);
     }
 
     auto addSide = [&](std::array<GLfloat, 12> face, float light, int nx, int ny, int nz) {
         if (!shouldDrawWaterSide(world, nx, ny, nz, h))
             return;
-        mesh.addFace(face, texCoords, m_location, blockPos, light);
+        sampleCellLight(world, nx, ny, nz, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, light, sky, blockL);
     };
 
     addSide({
@@ -286,19 +376,28 @@ void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{0, 1}, {0, 0}, {1, 0}, {1, 1}}; // ly, lz
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int yDir = corners[i][0] == 0 ? -1 : 1;
         const int zDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x + 1, y + yDir, z);
         const bool s2 = occludesAO(world, x + 1, y, z + zDir);
         const bool c  = occludesAO(world, x + 1, y + yDir, z + zDir);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        sampleCornerLight(world,
+                          x + 1, y, z,
+                          x + 1, y + yDir, z,
+                          x + 1, y, z + zDir,
+                          x + 1, y + yDir, z + zDir,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }
 
 void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -313,19 +412,28 @@ void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int yDir = corners[i][0] == 0 ? -1 : 1;
         const int zDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x - 1, y + yDir, z);
         const bool s2 = occludesAO(world, x - 1, y, z + zDir);
         const bool c  = occludesAO(world, x - 1, y + yDir, z + zDir);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        sampleCornerLight(world,
+                          x - 1, y, z,
+                          x - 1, y + yDir, z,
+                          x - 1, y, z + zDir,
+                          x - 1, y + yDir, z + zDir,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }
 
 void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -340,19 +448,28 @@ void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}}; // lx, lz
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int xDir = corners[i][0] == 0 ? -1 : 1;
         const int zDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x + xDir, y + 1, z);
         const bool s2 = occludesAO(world, x, y + 1, z + zDir);
         const bool c  = occludesAO(world, x + xDir, y + 1, z + zDir);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_TOP);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_TOP);
+        sampleCornerLight(world,
+                          x, y + 1, z,
+                          x + xDir, y + 1, z,
+                          x, y + 1, z + zDir,
+                          x + xDir, y + 1, z + zDir,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }
 
 void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -367,19 +484,28 @@ void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int xDir = corners[i][0] == 0 ? -1 : 1;
         const int zDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x + xDir, y - 1, z);
         const bool s2 = occludesAO(world, x, y - 1, z + zDir);
         const bool c  = occludesAO(world, x + xDir, y - 1, z + zDir);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_BOT);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_BOT);
+        sampleCornerLight(world,
+                          x, y - 1, z,
+                          x + xDir, y - 1, z,
+                          x, y - 1, z + zDir,
+                          x + xDir, y - 1, z + zDir,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }
 
 void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -394,19 +520,28 @@ void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}; // lx, ly
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int xDir = corners[i][0] == 0 ? -1 : 1;
         const int yDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x + xDir, y, z + 1);
         const bool s2 = occludesAO(world, x, y + yDir, z + 1);
         const bool c  = occludesAO(world, x + xDir, y + yDir, z + 1);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        sampleCornerLight(world,
+                          x, y, z + 1,
+                          x + xDir, y, z + 1,
+                          x, y + yDir, z + 1,
+                          x + xDir, y + yDir, z + 1,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }
 
 void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -421,17 +556,26 @@ void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, con
     };
 
     const int corners[4][2] = {{1, 0}, {0, 0}, {0, 1}, {1, 1}};
-    std::array<GLfloat, 4> lights{};
+    std::array<GLfloat, 4> shades{};
+    std::array<GLfloat, 4> skies{};
+    std::array<GLfloat, 4> blocks{};
     for (int i = 0; i < 4; ++i) {
         const int xDir = corners[i][0] == 0 ? -1 : 1;
         const int yDir = corners[i][1] == 0 ? -1 : 1;
         const bool s1 = occludesAO(world, x + xDir, y, z - 1);
         const bool s2 = occludesAO(world, x, y + yDir, z - 1);
         const bool c  = occludesAO(world, x + xDir, y + yDir, z - 1);
-        lights[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        sampleCornerLight(world,
+                          x, y, z - 1,
+                          x + xDir, y, z - 1,
+                          x, y + yDir, z - 1,
+                          x + xDir, y + yDir, z - 1,
+                          skies[i], blocks[i]);
     }
 
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
-    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z), lights);
+    targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
+                        shades, skies, blocks);
 }

@@ -49,6 +49,18 @@ public:
     // Caller must already hold a shared/unique lock on the chunk map
     ChunkBlock getBlockLocked(int worldX, int worldY, int worldZ) const;
 
+    uint8_t getSkyLight(int worldX, int worldY, int worldZ) const;
+    uint8_t getBlockLight(int worldX, int worldY, int worldZ) const;
+    uint8_t getSkyLightLocked(int worldX, int worldY, int worldZ) const;
+    uint8_t getBlockLightLocked(int worldX, int worldY, int worldZ) const;
+    void getLightsLocked(int worldX, int worldY, int worldZ,
+                         uint8_t& sky, uint8_t& block) const;
+    void setSkyLightLocked(int worldX, int worldY, int worldZ, uint8_t value);
+    void setBlockLightLocked(int worldX, int worldY, int worldZ, uint8_t value);
+
+    Chunk* getChunkLocked(int cx, int cz);
+    const Chunk* getChunkLocked(int cx, int cz) const;
+
     // Edit world block and remesh affected sections (main / GL thread).
     // Returns false if Y out of range or the chunk is not loaded.
     bool setBlock(int worldX, int worldY, int worldZ, ChunkBlock block);
@@ -60,6 +72,12 @@ public:
 
     // Terrain surface Y at column (same as generator; ignores player edits)
     int getSurfaceHeight(int worldX, int worldZ) const;
+
+    void advanceTime(int ticks);
+    uint64_t getWorldTick() const { return m_worldTick; }
+    Atmosphere getAtmosphere() const;
+
+    static int worldToChunk(int worldCoord);
 
 private:
     struct ChunkCoord {
@@ -116,20 +134,23 @@ private:
 
     void remeshAndUploadColumns(const std::vector<std::pair<int, int>>& cols);
 
+    void noteLightDirty(int cx, int cz);
+    void flushLightUpdates(std::vector<std::pair<int, int>>& remeshCols);
+
     static uint64_t chunkKey(int cx, int cz) {
         return (static_cast<uint64_t>(static_cast<uint32_t>(cx)) << 32) |
                 static_cast<uint32_t>(cz);
     }
 
-    static int worldToChunk(int worldCoord);
-
     mutable std::shared_mutex m_chunkMutex;
     std::unordered_map<uint64_t, std::unique_ptr<Chunk>> m_chunks;
     TerrainGenerator m_generator;
+    uint64_t m_worldTick = 6000; // noon
 
     // Fluid update queue (main thread only)
     std::deque<BlockPos> m_fluidQueue;
     std::unordered_set<BlockPos, BlockPosHash> m_fluidQueued;
+    std::unordered_set<uint64_t> m_lightDirty;
 
     // ── Worker queues ───────────────────────────────────────────────────────
     std::mutex m_queueMutex;

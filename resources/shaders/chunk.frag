@@ -14,6 +14,7 @@ uniform vec3 fogColor;
 uniform float fogStart;
 uniform float fogEnd;
 uniform float dayFactor;
+uniform float ambient;
 
 uniform int underwater;
 uniform int liquidPass;
@@ -24,8 +25,7 @@ uniform vec3 underwaterTint;
 
 float brightness(float t)
 {
-    // Milder than t² so mid-range sky (open pits, cave mouths) stays readable
-    return mix(0.08, 1.0, t * t * (2.0 - t));
+    return mix(0.12, 1.0, t * t * (2.0 - t));
 }
 
 void main()
@@ -36,8 +36,14 @@ void main()
 
     float skyB = brightness(SkyLevel / 15.0);
     float blockB = brightness(BlockLevel / 15.0);
-    float light = max(skyB * dayFactor, blockB);
-    vec3 lit = color.rgb * Shade * light;
+    float skyL = skyB * dayFactor;
+    float light = max(skyL, blockB);
+    vec3 lit = color.rgb * (ambient + (1.0 - ambient) * Shade * light);
+    // Moonlight tint on sky-lit surfaces only; torches stay warm
+    if (underwater == 0 && skyL >= blockB) {
+        float night = 1.0 - smoothstep(0.42, 0.92, dayFactor);
+        lit *= mix(vec3(1.0), vec3(0.90, 0.93, 1.05), night);
+    }
     float dist = length(FragPos - cameraPos);
     float alpha = color.a;
 
@@ -56,8 +62,10 @@ void main()
     } else {
         // In air
         if (liquidPass != 0) {
-            // Water surface from above: clearer cyan tint, moderate alpha
-            lit = mix(lit, vec3(0.25, 0.55, 0.85), 0.35);
+            // Day: original cyan surface. Night: dark water, no bright haze.
+            vec3 waterTint = mix(vec3(0.03, 0.05, 0.10), vec3(0.25, 0.55, 0.85),
+                                 smoothstep(0.15, 0.75, dayFactor));
+            lit = mix(lit, waterTint, 0.35);
             alpha = min(alpha, 0.72);
         }
         float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);

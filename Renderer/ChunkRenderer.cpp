@@ -42,6 +42,7 @@ void ChunkRenderer::Render(const Camera& camera, bool underwater,
     m_shader.SetFloat("fogStart", FOG_START);
     m_shader.SetFloat("fogEnd", FOG_END);
     m_shader.SetFloat("dayFactor", atmosphere.dayFactor);
+    m_shader.SetFloat("ambient", AMBIENT_BRIGHTNESS);
     m_shader.SetInteger("underwater", underwater ? 1 : 0);
     m_shader.SetVector3f("underwaterFogColor",
                          UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B);

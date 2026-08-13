@@ -61,7 +61,19 @@ constexpr int LIGHT_LEVEL_MAX = 15;
 constexpr int LIGHT_EDIT_RADIUS = 16;
 constexpr int DAY_LENGTH = 24000;
 constexpr int TICKS_PER_SECOND = 20;
-constexpr float NIGHT_DAY_FACTOR = 0.05f;
+constexpr int TICK_NOON = 6000;
+constexpr int TICK_MIDNIGHT = 18000;
+// Half-width of full day / full night. Remaining ticks are long dawn / dusk.
+constexpr int DAY_PLATEAU_HALF = 1500;
+constexpr int NIGHT_PLATEAU_HALF = 1500;
+// ~5 min per full cycle (Minecraft is 20).
+constexpr float WORLD_TIME_SCALE = 4.0f;
+// Hold T to speed up the day cycle (1 = no extra, 5 = five times faster).
+constexpr float TIME_FAST_FORWARD = 10.0f;
+// Moonlight scale on sky light (night is dimmer than day, not black).
+constexpr float NIGHT_DAY_FACTOR = 0.15f;
+// Base visibility for non-emissive blocks (caves, night, AO corners).
+constexpr float AMBIENT_BRIGHTNESS = 0.0f;
 
 struct Atmosphere {
     float dayFactor = 1.0f;

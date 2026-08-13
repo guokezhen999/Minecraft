@@ -163,32 +163,81 @@ void World::advanceTime(int ticks) {
     m_worldTick += static_cast<uint64_t>(ticks);
 }
 
+namespace {
+
+float dayAmountForTick(int t) {
+    const int dayStart = TICK_NOON - DAY_PLATEAU_HALF;
+    const int dayEnd = TICK_NOON + DAY_PLATEAU_HALF;
+    const int nightStart = TICK_MIDNIGHT - NIGHT_PLATEAU_HALF;
+    const int nightEnd = TICK_MIDNIGHT + NIGHT_PLATEAU_HALF;
+    const float tf = static_cast<float>(t);
+
+    if (t >= dayStart && t < dayEnd)
+        return 1.0f;
+    if (t >= nightStart && t < nightEnd)
+        return 0.0f;
+    if (t >= dayEnd && t < nightStart) {
+        return 1.0f - glm::smoothstep(static_cast<float>(dayEnd),
+                                      static_cast<float>(nightStart), tf);
+    }
+
+    const int dawnLen = (DAY_LENGTH - nightEnd) + dayStart;
+    const int elapsed =
+        (t >= nightEnd) ? (t - nightEnd) : (t + (DAY_LENGTH - nightEnd));
+    return glm::smoothstep(0.0f, static_cast<float>(dawnLen),
+                           static_cast<float>(elapsed));
+}
+
+float twilightBell(int t, int start, int end) {
+    int len = 0;
+    int elapsed = 0;
+    if (end > start) {
+        if (t < start || t >= end)
+            return 0.0f;
+        len = end - start;
+        elapsed = t - start;
+    } else {
+        if (t < start && t >= end)
+            return 0.0f;
+        len = (DAY_LENGTH - start) + end;
+        elapsed = (t >= start) ? (t - start) : (t + DAY_LENGTH - start);
+    }
+    const float u = static_cast<float>(elapsed) / static_cast<float>(len);
+    return std::sin(u * 3.14159265f);
+}
+
+} // namespace
+
 Atmosphere World::getAtmosphere() const {
     Atmosphere atmo;
     const int t = static_cast<int>(m_worldTick % static_cast<uint64_t>(DAY_LENGTH));
-    const float ang = (static_cast<float>(t) / static_cast<float>(DAY_LENGTH)) *
-                      6.28318530718f;
-    const float sun = std::sin(ang);
-
-    const float day01 = glm::smoothstep(-0.05f, 0.28f, sun);
+    const float day01 = dayAmountForTick(t);
     atmo.dayFactor = glm::mix(NIGHT_DAY_FACTOR, 1.0f, day01);
 
-    float dusk = glm::clamp(1.0f - std::abs(sun) / 0.22f, 0.0f, 1.0f);
-    if (sun < 0.0f)
-        dusk *= glm::clamp(1.0f + sun / 0.18f, 0.0f, 1.0f);
+    const int dayEnd = TICK_NOON + DAY_PLATEAU_HALF;
+    const int nightStart = TICK_MIDNIGHT - NIGHT_PLATEAU_HALF;
+    const int nightEnd = TICK_MIDNIGHT + NIGHT_PLATEAU_HALF;
+    const int dayStart = TICK_NOON - DAY_PLATEAU_HALF;
+    const float dusk = twilightBell(t, dayEnd, nightStart);
+    const float dawn = twilightBell(t, nightEnd, dayStart);
 
     const glm::vec3 dayTop(SKY_TOP_R, SKY_TOP_G, SKY_TOP_B);
     const glm::vec3 dayHor(SKY_HORIZON_R, SKY_HORIZON_G, SKY_HORIZON_B);
-    const glm::vec3 duskTop(0.18f, 0.10f, 0.28f);
-    const glm::vec3 duskHor(0.98f, 0.42f, 0.20f);
-    const glm::vec3 nightTop(0.01f, 0.02f, 0.07f);
-    const glm::vec3 nightHor(0.04f, 0.05f, 0.12f);
+    const glm::vec3 duskTop(0.16f, 0.08f, 0.22f);
+    const glm::vec3 duskHor(0.72f, 0.32f, 0.16f);
+    const glm::vec3 dawnTop(0.18f, 0.10f, 0.24f);
+    const glm::vec3 dawnHor(0.70f, 0.40f, 0.28f);
+    const glm::vec3 nightTop(0.03f, 0.04f, 0.10f);
+    const glm::vec3 nightHor(0.05f, 0.06f, 0.12f);
+    const glm::vec3 nightFog(0.04f, 0.05f, 0.09f);
 
     atmo.skyTop = glm::mix(nightTop, dayTop, day01);
     atmo.skyHorizon = glm::mix(nightHor, dayHor, day01);
     atmo.skyTop = glm::mix(atmo.skyTop, duskTop, dusk * 0.85f);
     atmo.skyHorizon = glm::mix(atmo.skyHorizon, duskHor, dusk);
-    atmo.fogColor = atmo.skyHorizon;
+    atmo.skyTop = glm::mix(atmo.skyTop, dawnTop, dawn * 0.75f);
+    atmo.skyHorizon = glm::mix(atmo.skyHorizon, dawnHor, dawn);
+    atmo.fogColor = glm::mix(nightFog, atmo.skyHorizon, day01);
     return atmo;
 }
 

@@ -75,9 +75,11 @@ void Game::Update(float deltaTime)
 
     m_cameraUnderwater = m_World->isCameraUnderwater(m_Camera->Position);
 
-    m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND);
-    if (Keys[GLFW_KEY_T])
-        m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) * 79.0f;
+    m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) * WORLD_TIME_SCALE;
+    if (Keys[GLFW_KEY_T]) {
+        m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) *
+                     WORLD_TIME_SCALE * (TIME_FAST_FORWARD - 1.0f);
+    }
     int ticks = 0;
     while (m_tickAcc >= 1.0f) {
         m_tickAcc -= 1.0f;

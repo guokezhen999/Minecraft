@@ -40,3 +40,6 @@ Minecraft
 *.log
 *.tmp
 *.bak
+
+# Game saves (runtime)
+saves/

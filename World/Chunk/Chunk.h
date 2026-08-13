@@ -29,6 +29,10 @@ public:
     ChunkBlock getBlock(int lx, int worldY, int lz) const;
     void setBlock(int lx, int worldY, int lz, ChunkBlock block);
 
+    void markModified() { m_modified = true; }
+    bool isModified() const { return m_modified; }
+    void clearModified() { m_modified = false; }
+
     uint8_t getSkyLight(int lx, int worldY, int lz) const;
     uint8_t getBlockLight(int lx, int worldY, int lz) const;
     void setSkyLight(int lx, int worldY, int lz, uint8_t value);
@@ -63,6 +67,7 @@ private:
 
     int m_cx;
     int m_cz;
+    bool m_modified = false;
     std::array<std::unique_ptr<ChunkSection>, CHUNK_SECTIONS> m_sections;
 };
 

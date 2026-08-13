@@ -5,7 +5,6 @@
 #ifndef MINECRAFT_RENDERMASTER_H
 #define MINECRAFT_RENDERMASTER_H
 
-#include "CubeRenderer.h"
 #include "ChunkRenderer.h"
 #include "../World/Chunk/ChunkMesh.h"
 #include "../World/WorldConstants.h"
@@ -15,18 +14,13 @@
 class RenderMaster
 {
 public:
-    CubeRenderer *m_CubeRenderers;
-    bool m_DrawBox = false;
-
-    void RenderBlocks(Camera &camera);
-
     // Queue chunk meshes; flora optional (LOD)
     void DrawChunk(const ChunkMeshCollection& meshes, float distSq, bool drawFlora);
 
     void FinishChunkRender(const Camera &camera, bool underwater,
                            const Atmosphere& atmosphere);
 
-    void InitCubeRenderer();
+    void shutdown();
 
 private:
     std::unique_ptr<ChunkRenderer> m_chunkRenderer;

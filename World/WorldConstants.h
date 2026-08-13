@@ -80,6 +80,8 @@ struct Atmosphere {
     glm::vec3 skyTop{SKY_TOP_R, SKY_TOP_G, SKY_TOP_B};
     glm::vec3 skyHorizon{SKY_HORIZON_R, SKY_HORIZON_G, SKY_HORIZON_B};
     glm::vec3 fogColor{FOG_R, FOG_G, FOG_B};
+    float fogStart = FOG_START;
+    float fogEnd = FOG_END;
 };
 
 #endif //MINECRAFT_WORLDCONSTANTS_H

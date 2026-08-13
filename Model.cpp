@@ -25,12 +25,16 @@ m_buffers(std::move(other.m_buffers))
 
 Model &Model::operator=(Model &&other)
 {
-    m_renderInfo = other.m_renderInfo;
-    m_vboCount = other.m_vboCount;
-    m_buffers = std::move(other.m_buffers);
+    if (this != &other) {
+        DeleteData();
+        m_renderInfo = other.m_renderInfo;
+        m_vboCount = other.m_vboCount;
+        m_buffers = std::move(other.m_buffers);
 
-    other.m_renderInfo.Reset();
-    other.m_vboCount = 0;
+        other.m_renderInfo.Reset();
+        other.m_vboCount = 0;
+    }
+    return *this;
 }
 
 void Model::AddData(const Mesh &mesh)
@@ -70,6 +74,7 @@ void Model::AddEBO(const std::vector<GLuint> &indices)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint),
                  indices.data(), GL_STATIC_DRAW);
+    m_buffers.push_back(EBO);
 }
 
 void Model::AddVBO(int dimensions, const std::vector<GLfloat> &data)

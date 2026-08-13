@@ -9,8 +9,8 @@
 #include "ChunkMesh.h"
 #include "../WorldConstants.h"
 
+#include <array>
 #include <cstdint>
-#include <vector>
 #include <glm/glm.hpp>
 
 class World;
@@ -88,9 +88,9 @@ private:
                          GLfloat& sky, GLfloat& block) const;
 
 private:
-    std::vector<ChunkBlock> m_blocks;
-    std::vector<uint8_t> m_skyLight;
-    std::vector<uint8_t> m_blockLight;
+    std::array<ChunkBlock, CHUNK_VOLUME> m_blocks{};
+    std::array<uint8_t, CHUNK_VOLUME> m_skyLight{};
+    std::array<uint8_t, CHUNK_VOLUME> m_blockLight{};
     ChunkMeshCollection m_meshes;
     glm::ivec3 m_location;
     bool m_hasMesh = false;

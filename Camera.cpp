@@ -6,7 +6,8 @@
 #include <cmath>
 
 Camera::Camera(const Config &config, glm::vec3 position, glm::vec3 up, float yaw, float pitch)
-: m_config(config), Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY),
+: m_config(config), Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED),
+  MouseSensitivity(config.mouseSensitivity),
   Zoom(static_cast<float>(config.fov))
 {
     m_projectionMatrix = makeProjectionMatrix(config);
@@ -83,6 +84,14 @@ void Camera::UpdateAspectRatio(int width, int height)
 void Camera::SetPosition(const glm::vec3& position)
 {
     Position = position;
+    updateMatrices();
+}
+
+void Camera::SetLook(float yaw, float pitch)
+{
+    Yaw = yaw;
+    Pitch = glm::clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
+    updateCameraVectors();
     updateMatrices();
 }
 

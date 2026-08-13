@@ -54,10 +54,11 @@ public:
     void ProcessMouseScroll(float yoffset);
     void UpdateAspectRatio(int width, int height);
     void SetPosition(const glm::vec3& position);
+    void SetLook(float yaw, float pitch);
+    void updateMatrices();
 
 private:
     void updateCameraVectors();
-    void updateMatrices();
     static glm::mat4 makeProjectionMatrix(const Config &config);
 
     glm::mat4 m_projectionMatrix;

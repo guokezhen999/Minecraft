@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include "Game.h"
 #include "World/WorldConstants.h"
+#include "World/WorldSave.h"
 
 namespace
 {
@@ -11,15 +12,23 @@ struct InputState
 {
     Camera* camera;
     Game* game;
-    bool mouseCaptured = true;
+    bool mouseCaptured = false;
     bool firstMouse = true;
     double lastMouseX = 0.0;
     double lastMouseY = 0.0;
+    bool needsRedraw = true;
 };
 
 InputState* inputState(GLFWwindow* window)
 {
     return static_cast<InputState*>(glfwGetWindowUserPointer(window));
+}
+
+void requestMenuRedraw(GLFWwindow* window)
+{
+    InputState* input = inputState(window);
+    if (input && input->game && !input->game->isPlaying())
+        input->needsRedraw = true;
 }
 
 void setMouseCaptured(GLFWwindow* window, bool captured)
@@ -34,6 +43,10 @@ void setMouseCaptured(GLFWwindow* window, bool captured)
 void cursorPositionCallback(GLFWwindow* window, double xpos, double ypos)
 {
     InputState* input = inputState(window);
+    input->game->setCursorPos(xpos, ypos);
+    if (!input->mouseCaptured)
+        requestMenuRedraw(window);
+
     if (!input->mouseCaptured)
         return;
 
@@ -58,37 +71,40 @@ void keyCallback(GLFWwindow* window, int key, int, int action, int)
     if (key >= 0 && key < KEY_COUNT)
         input->game->Keys[key] = action != GLFW_RELEASE;
 
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        if (input->mouseCaptured)
-            setMouseCaptured(window, false);
-        else
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+        input->game->OnEscape();
+    else
+        input->game->OnKey(key, action);
+    requestMenuRedraw(window);
+}
+
+void charCallback(GLFWwindow* window, unsigned int codepoint)
+{
+    inputState(window)->game->OnChar(codepoint);
+    requestMenuRedraw(window);
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int)
 {
-    if (action != GLFW_PRESS)
-        return;
-
     InputState* input = inputState(window);
-    if (!input->mouseCaptured) {
-        if (glfwGetWindowAttrib(window, GLFW_FOCUSED))
-            setMouseCaptured(window, true);
+    if (input->game->isPlaying()) {
+        if (!input->mouseCaptured || action != GLFW_PRESS)
+            return;
+        if (button == GLFW_MOUSE_BUTTON_LEFT)
+            input->game->OnLeftClick();
+        else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+            input->game->OnRightClick();
         return;
     }
 
-    if (button == GLFW_MOUSE_BUTTON_LEFT)
-        input->game->OnLeftClick();
-    else if (button == GLFW_MOUSE_BUTTON_RIGHT)
-        input->game->OnRightClick();
+    input->game->OnMouseButton(button, action);
+    requestMenuRedraw(window);
 }
 
 void scrollCallback(GLFWwindow* window, double, double yoffset)
 {
-    InputState* input = inputState(window);
-    if (input->mouseCaptured)
-        input->game->OnScroll(static_cast<float>(yoffset));
+    inputState(window)->game->OnScroll(static_cast<float>(yoffset));
+    requestMenuRedraw(window);
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
@@ -96,18 +112,84 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
     if (height > 0)
         inputState(window)->camera->UpdateAspectRatio(width, height);
+    requestMenuRedraw(window);
 }
 
 void focusCallback(GLFWwindow* window, int focused)
 {
-    if (!focused && inputState(window)->mouseCaptured)
-        setMouseCaptured(window, false);
+    InputState* input = inputState(window);
+    if (!focused && input->game->isPlaying())
+        input->game->OnEscape();
+    requestMenuRedraw(window);
+}
+
+void applyStartupVideo(GLFWwindow* window, const Config& config)
+{
+    glfwSwapInterval(config.vsync ? 1 : 0);
+    if (!config.isFullscreen)
+        return;
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    if (!monitor)
+        return;
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    if (!mode)
+        return;
+    glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height,
+                         mode->refreshRate);
+    glfwSwapInterval(config.vsync ? 1 : 0);
+}
+
+int displayRefreshRate(GLFWwindow* window)
+{
+    GLFWmonitor* monitor = glfwGetWindowMonitor(window);
+    if (!monitor)
+        monitor = glfwGetPrimaryMonitor();
+    if (!monitor)
+        return 60;
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    if (!mode || mode->refreshRate < 30)
+        return 60;
+    return mode->refreshRate;
+}
+
+void capPlayFrameRate(GLFWwindow* window, bool vsync, double frameStart)
+{
+    if (!vsync)
+        return;
+    const double minDt = 1.0 / static_cast<double>(displayRefreshRate(window));
+    const double elapsed = glfwGetTime() - frameStart;
+    if (elapsed < minDt)
+        glfwWaitEventsTimeout(minDt - elapsed);
+}
+
+// Menus are static: sleep until input, and never present faster than 30 Hz
+// while the mouse is moving. Continuous presents keep the M-series GPU
+// clocked up even for a cheap sky pass (macmon ~90% at <1W).
+bool waitForMenuFrame(GLFWwindow* window, InputState& input, double& lastPresent)
+{
+    constexpr double kMinDt = 1.0 / 30.0;
+    while (!glfwWindowShouldClose(window) && !input.game->isPlaying()) {
+        const double now = glfwGetTime();
+        if (!input.needsRedraw) {
+            glfwWaitEvents();
+            continue;
+        }
+        const double wait = lastPresent + kMinDt - now;
+        if (wait > 0.0) {
+            glfwWaitEventsTimeout(wait);
+            continue;
+        }
+        glfwPollEvents();
+        return true;
+    }
+    return !glfwWindowShouldClose(window);
 }
 }
 
 int main()
 {
     Config config;
+    WorldSave::loadSettings(config);
     Camera camera(config);
     Game game(config, camera);
 
@@ -130,6 +212,7 @@ int main()
         return -1;
     }
 
+    glfwSetWindowPos(window, config.windowPosX, config.windowPosY);
     glfwMakeContextCurrent(window);
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
         std::cout << "Failed to initialize GLAD" << std::endl;
@@ -138,17 +221,18 @@ int main()
         return -1;
     }
 
-    InputState input{&camera, &game};
+    InputState input{&camera, &game, false, true, 0.0, 0.0, true};
     glfwSetWindowUserPointer(window, &input);
     glfwSetCursorPosCallback(window, cursorPositionCallback);
     glfwSetKeyCallback(window, keyCallback);
+    glfwSetCharCallback(window, charCallback);
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetScrollCallback(window, scrollCallback);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
     glfwSetWindowFocusCallback(window, focusCallback);
-    setMouseCaptured(window, true);
+    setMouseCaptured(window, false);
+    applyStartupVideo(window, config);
 
-    glfwSwapInterval(1);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
@@ -157,17 +241,31 @@ int main()
     glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
     framebufferSizeCallback(window, framebufferWidth, framebufferHeight);
 
+    game.setWindow(window);
     game.Init();
 
     double lastTime = glfwGetTime();
+    double lastMenuPresent = 0.0;
     while (!glfwWindowShouldClose(window)) {
-        const double currentTime = glfwGetTime();
-        const float deltaTime = static_cast<float>(currentTime - lastTime);
-        lastTime = currentTime;
+        if (!game.isPlaying()) {
+            if (!waitForMenuFrame(window, input, lastMenuPresent))
+                break;
+        } else {
+            glfwPollEvents();
+        }
 
-        glfwPollEvents();
-        game.ProcessInput(deltaTime);
-        game.Update(deltaTime);
+        const double frameStart = glfwGetTime();
+        const float deltaTime = static_cast<float>(frameStart - lastTime);
+        lastTime = frameStart;
+
+        const bool wantCapture = game.isPlaying();
+        if (wantCapture != input.mouseCaptured)
+            setMouseCaptured(window, wantCapture);
+
+        if (game.isPlaying()) {
+            game.ProcessInput(deltaTime);
+            game.Update(deltaTime);
+        }
 
         if (game.isCameraUnderwater())
             glClearColor(UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B, 1.0f);
@@ -178,11 +276,21 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+        const GameScreen screenBefore = game.screen();
         game.Render(framebufferWidth, framebufferHeight);
+        game.endFrame();
 
         glfwSwapBuffers(window);
+
+        if (game.isPlaying()) {
+            capPlayFrameRate(window, game.m_Config.vsync, frameStart);
+        } else {
+            lastMenuPresent = glfwGetTime();
+            input.needsRedraw = game.screen() != screenBefore;
+        }
     }
 
+    game.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;

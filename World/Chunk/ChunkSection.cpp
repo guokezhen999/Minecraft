@@ -17,10 +17,12 @@ constexpr float LIGHT_BOT = 0.72f;
 } // namespace
 
 ChunkSection::ChunkSection(const glm::ivec3& position)
-    : m_location(position),
-      m_blocks(CHUNK_VOLUME, ChunkBlock(BlockId::Air)),
-      m_skyLight(CHUNK_VOLUME, static_cast<uint8_t>(LIGHT_LEVEL_MAX)),
-      m_blockLight(CHUNK_VOLUME, 0) {}
+    : m_location(position)
+{
+    m_blocks.fill(ChunkBlock(BlockId::Air));
+    m_skyLight.fill(static_cast<uint8_t>(LIGHT_LEVEL_MAX));
+    m_blockLight.fill(0);
+}
 
 ChunkSection::~ChunkSection() {
     m_meshes.solidMesh.deleteData();

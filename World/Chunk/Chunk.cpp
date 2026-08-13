@@ -80,6 +80,7 @@ void Chunk::setBlock(int lx, int worldY, int lz, ChunkBlock block) {
     const int ly = localY(worldY);
     m_sections[sy]->setBlock(lx, ly, lz, block);
     m_sections[sy]->markDirty();
+    m_modified = true;
 
     // Vertical neighbor faces may change
     if (ly == 0 && sy > 0)

@@ -13,6 +13,7 @@
 #include <memory>
 #include <cstdint>
 #include <utility>
+#include <string>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -31,7 +32,7 @@ class Camera;
 
 class World {
 public:
-    explicit World(int seed = 0);
+    World(int seed, std::string savePath, int renderDistance);
     ~World();
 
     World(const World&) = delete;
@@ -75,7 +76,14 @@ public:
 
     void advanceTime(int ticks);
     uint64_t getWorldTick() const { return m_worldTick; }
+    void setWorldTick(uint64_t tick) { m_worldTick = tick; }
     Atmosphere getAtmosphere() const;
+
+    void flushDirtyColumns();
+    void setRenderDistance(int distance);
+    int getRenderDistance() const { return m_renderDistance; }
+    int getSeed() const;
+    const std::string& savePath() const { return m_savePath; }
 
     static int worldToChunk(int worldCoord);
 
@@ -108,6 +116,8 @@ private:
     void unloadDistantChunks(int centerCX, int centerCZ);
 
     void fillChunk(Chunk& chunk, int cx, int cz);
+    bool tryLoadColumn(Chunk& chunk, int cx, int cz);
+    int unloadDistance() const { return m_renderDistance + 2; }
     void placeDecorations(Chunk& chunk, int cx, int cz);
     void placeOakTree(Chunk& chunk, int cx, int cz,
                       int wx, int surfY, int wz, int trunkHeight);
@@ -145,6 +155,8 @@ private:
     mutable std::shared_mutex m_chunkMutex;
     std::unordered_map<uint64_t, std::unique_ptr<Chunk>> m_chunks;
     TerrainGenerator m_generator;
+    std::string m_savePath;
+    int m_renderDistance = RENDER_DISTANCE;
     uint64_t m_worldTick = 6000; // noon
 
     // Fluid update queue (main thread only)

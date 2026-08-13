@@ -10,11 +10,15 @@
 #include "Block/BlockData.h"
 #include "Block/Water.h"
 #include "LightEngine.h"
+#include "WorldSave.h"
 
 #include <cmath>
 #include <algorithm>
 
-World::World(int seed) : m_generator(seed) {
+World::World(int seed, std::string savePath, int renderDistance)
+    : m_generator(seed),
+      m_savePath(std::move(savePath)),
+      m_renderDistance(std::clamp(renderDistance, 4, 16)) {
     m_worker = std::thread(&World::workerLoop, this);
 }
 
@@ -26,6 +30,37 @@ World::~World() {
     m_queueCv.notify_all();
     if (m_worker.joinable())
         m_worker.join();
+}
+
+int World::getSeed() const {
+    return m_generator.getSeed();
+}
+
+void World::setRenderDistance(int distance) {
+    m_renderDistance = std::clamp(distance, 4, 16);
+}
+
+bool World::tryLoadColumn(Chunk& chunk, int cx, int cz) {
+    if (m_savePath.empty())
+        return false;
+    if (!WorldSave::loadColumn(m_savePath, cx, cz, chunk))
+        return false;
+    LightEngine::computeColumn(chunk);
+    chunk.markNonEmptySectionsDirty();
+    chunk.clearModified();
+    return true;
+}
+
+void World::flushDirtyColumns() {
+    std::unique_lock<std::shared_mutex> lock(m_chunkMutex);
+    if (m_savePath.empty())
+        return;
+    for (auto& [key, chunk] : m_chunks) {
+        if (!chunk || !chunk->isModified())
+            continue;
+        if (WorldSave::saveColumn(m_savePath, chunk->getCX(), chunk->getCZ(), *chunk))
+            chunk->clearModified();
+    }
 }
 
 int World::worldToChunk(int worldCoord) {
@@ -238,6 +273,9 @@ Atmosphere World::getAtmosphere() const {
     atmo.skyTop = glm::mix(atmo.skyTop, dawnTop, dawn * 0.75f);
     atmo.skyHorizon = glm::mix(atmo.skyHorizon, dawnHor, dawn);
     atmo.fogColor = glm::mix(nightFog, atmo.skyHorizon, day01);
+    const float range = static_cast<float>(m_renderDistance * CHUNK_SIZE);
+    atmo.fogStart = range * 0.55f;
+    atmo.fogEnd = range * 0.92f;
     return atmo;
 }
 
@@ -574,7 +612,7 @@ void World::setWorldBlock(Chunk& chunk, int cx, int cz,
     if (lx < 0 || lx >= CHUNK_SIZE) return;
     if (lz < 0 || lz >= CHUNK_SIZE) return;
     if (wy < 0 || wy >= WORLD_HEIGHT) return;
-    chunk.setBlock(lx, wy, lz, ChunkBlock(id));
+    chunk.setBlockRaw(lx, wy, lz, ChunkBlock(id));
 }
 
 void World::setDecorationBlock(Chunk& chunk, int cx, int cz,
@@ -587,7 +625,7 @@ void World::setDecorationBlock(Chunk& chunk, int cx, int cz,
     // Do not plant into water or replace existing solid blocks
     if (chunk.getBlock(lx, wy, lz) != BlockId::Air)
         return;
-    chunk.setBlock(lx, wy, lz, ChunkBlock(id));
+    chunk.setBlockRaw(lx, wy, lz, ChunkBlock(id));
 }
 
 void World::placeOakTree(Chunk& chunk, int cx, int cz,
@@ -767,10 +805,10 @@ void World::markNeighborsDirty(int cx, int cz) {
 void World::enqueueMissingChunks(int centerCX, int centerCZ) {
     struct Candidate { int cx, cz, dist2; };
     std::vector<Candidate> missing;
-    missing.reserve((RENDER_DISTANCE * 2 + 1) * (RENDER_DISTANCE * 2 + 1));
+    missing.reserve((m_renderDistance * 2 + 1) * (m_renderDistance * 2 + 1));
 
-    for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; ++dx) {
-        for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; ++dz) {
+    for (int dx = -m_renderDistance; dx <= m_renderDistance; ++dx) {
+        for (int dz = -m_renderDistance; dz <= m_renderDistance; ++dz) {
             int cx = centerCX + dx;
             int cz = centerCZ + dz;
             if (isChunkLoaded(cx, cz)) continue;
@@ -866,7 +904,15 @@ void World::unloadDistantChunks(int centerCX, int centerCZ) {
         for (auto it = m_chunks.begin(); it != m_chunks.end(); ) {
             const int dx = it->second->getCX() - centerCX;
             const int dz = it->second->getCZ() - centerCZ;
-            if (std::abs(dx) > UNLOAD_DISTANCE || std::abs(dz) > UNLOAD_DISTANCE) {
+            if (std::abs(dx) > unloadDistance() || std::abs(dz) > unloadDistance()) {
+                if (it->second->isModified() && !m_savePath.empty()) {
+                    if (!WorldSave::saveColumn(m_savePath, it->second->getCX(),
+                                               it->second->getCZ(), *it->second)) {
+                        ++it;
+                        continue;
+                    }
+                    it->second->clearModified();
+                }
                 it = m_chunks.erase(it);
             } else {
                 ++it;
@@ -888,9 +934,9 @@ void World::unloadDistantChunks(int centerCX, int centerCZ) {
             }
         }
     };
-    dropFar(m_genQueue, &m_genQueued, RENDER_DISTANCE);
-    dropFar(m_meshQueue, &m_meshQueued, UNLOAD_DISTANCE);
-    dropFar(m_uploadQueue, nullptr, UNLOAD_DISTANCE);
+    dropFar(m_genQueue, &m_genQueued, m_renderDistance);
+    dropFar(m_meshQueue, &m_meshQueued, unloadDistance());
+    dropFar(m_uploadQueue, nullptr, unloadDistance());
 }
 
 void World::workerLoop() {
@@ -924,7 +970,8 @@ void World::workerLoop() {
 
         if (hasGen) {
             auto chunk = std::make_unique<Chunk>(genTask.cx, genTask.cz);
-            fillChunk(*chunk, genTask.cx, genTask.cz);
+            if (!tryLoadColumn(*chunk, genTask.cx, genTask.cz))
+                fillChunk(*chunk, genTask.cx, genTask.cz);
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
                 m_generatedChunks.push_back(std::move(chunk));
@@ -962,12 +1009,14 @@ void World::Update(const glm::vec3& cameraPos) {
 }
 
 void World::Render(RenderMaster& master, const Camera& camera, bool underwater) {
+    const Atmosphere atmo = getAtmosphere();
     Frustum frustum;
     frustum.update(camera.GetProjectionViewMatrix());
 
-    const float fogCull = FOG_END + static_cast<float>(CHUNK_SIZE) * 1.5f;
+    const float fogCull = atmo.fogEnd + static_cast<float>(CHUNK_SIZE) * 1.5f;
     const float renderDistSq = fogCull * fogCull;
-    const float floraDistSq = FLORA_LOD_DISTANCE * FLORA_LOD_DISTANCE;
+    const float floraDist = static_cast<float>(m_renderDistance * CHUNK_SIZE) * 0.55f;
+    const float floraDistSq = floraDist * floraDist;
     const glm::vec3 camPos = camera.Position;
 
     std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
@@ -1001,7 +1050,7 @@ void World::Render(RenderMaster& master, const Camera& camera, bool underwater) 
     }
 
     lock.unlock();
-    master.FinishChunkRender(camera, underwater, getAtmosphere());
+    master.FinishChunkRender(camera, underwater, atmo);
 }
 
 bool World::isCameraUnderwater(const glm::vec3& eyePos) const {

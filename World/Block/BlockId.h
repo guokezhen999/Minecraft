@@ -23,6 +23,12 @@ enum class BlockId : Block_t {
     TallGrass,
     DeadShrub,
     Torch,
+    Sandstone,
+    Ice,
+    Snow,
+    SavannaGrass,
+    SavannaBark,
+    SavannaLeaf,
 
     NUM_TYPES
 };

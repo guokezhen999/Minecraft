@@ -1,0 +1,32 @@
+Name
+Savanna Grass
+
+Id
+16
+
+TexTop
+2 1
+
+TexSide
+3 1
+
+TexBottom
+2 0
+
+Opaque
+1
+
+MeshType
+0
+
+ShaderType
+0
+
+Collidable
+1
+
+LightOpacity
+15
+
+LightEmission
+0

@@ -2,7 +2,7 @@
 
 个人学习用的体素沙盒：区块流式加载、水体、光照、昼夜循环，以及可存档的标题/暂停菜单。
 
-当前版本：**v0.1.0**（预发布）。需要 macOS + Homebrew 的 GLFW，或从 Release 下载 Apple Silicon 包。
+当前版本：**v0.1.0**（预发布）。下一版规划：[docs/v0.2.0/OVERALL.md](docs/v0.2.0/OVERALL.md)（地形 [TERRAIN.md](docs/v0.2.0/TERRAIN.md)、地平线雾 [HORIZON_FOG.md](docs/v0.2.0/HORIZON_FOG.md)）。
 
 本版说明：[docs/v0.1.0/OVERALL.md](docs/v0.1.0/OVERALL.md)（光照 [LIGHTING.md](docs/v0.1.0/LIGHTING.md)、菜单与存档 [MENU_AND_SAVES.md](docs/v0.1.0/MENU_AND_SAVES.md)）。
 

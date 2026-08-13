@@ -1,0 +1,32 @@
+Name
+Savanna Bark
+
+Id
+17
+
+TexTop
+5 1
+
+TexSide
+4 1
+
+TexBottom
+5 1
+
+Opaque
+1
+
+MeshType
+0
+
+ShaderType
+0
+
+Collidable
+1
+
+LightOpacity
+15
+
+LightEmission
+0

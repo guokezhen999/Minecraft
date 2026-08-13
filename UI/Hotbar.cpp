@@ -13,11 +13,11 @@ Hotbar::Hotbar()
         BlockId::Stone,
         BlockId::Dirt,
         BlockId::Grass,
+        BlockId::SavannaGrass,
         BlockId::Sand,
-        BlockId::OakBark,
-        BlockId::OakLeaf,
-        BlockId::Cactus,
-        BlockId::Water,
+        BlockId::Sandstone,
+        BlockId::Ice,
+        BlockId::Snow,
         BlockId::Torch,
     };
 }

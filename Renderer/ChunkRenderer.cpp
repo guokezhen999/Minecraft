@@ -42,7 +42,11 @@ void ChunkRenderer::Render(const Camera& camera, bool underwater,
     m_shader.SetFloat("fogStart", atmosphere.fogStart);
     m_shader.SetFloat("fogEnd", atmosphere.fogEnd);
     m_shader.SetFloat("dayFactor", atmosphere.dayFactor);
-    m_shader.SetFloat("ambient", AMBIENT_BRIGHTNESS);
+    m_shader.SetVector3f("sunDir", atmosphere.sunDir);
+    m_shader.SetVector3f("sunColor", atmosphere.sunColor);
+    m_shader.SetVector3f("moonDir", atmosphere.moonDir);
+    m_shader.SetVector3f("moonColor", atmosphere.moonColor);
+    m_shader.SetVector3f("skyLightColor", atmosphere.skyLightColor);
     m_shader.SetInteger("underwater", underwater ? 1 : 0);
     m_shader.SetVector3f("underwaterFogColor",
                          UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B);

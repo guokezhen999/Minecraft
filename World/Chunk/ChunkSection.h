@@ -77,7 +77,7 @@ private:
 
     bool occludesAO(const World& world, int x, int y, int z) const;
     static int vertexAO(bool side1, bool side2, bool corner);
-    static float shadeAO(int ao, float cardinal);
+    static float shadeAO(int ao);
     void sampleCornerLight(const World& world,
                            int x0, int y0, int z0,
                            int x1, int y1, int z1,

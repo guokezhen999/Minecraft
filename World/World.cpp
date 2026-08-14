@@ -285,6 +285,37 @@ Atmosphere World::getAtmosphere() const {
     const float range = static_cast<float>(m_renderDistance * CHUNK_SIZE);
     atmo.fogStart = range * 0.55f;
     atmo.fogEnd = range * 0.92f;
+
+    const float tau = 6.28318530718f;
+    const float a = (static_cast<float>(t) / static_cast<float>(DAY_LENGTH)) * tau;
+    // East at dawn, south and high at noon, west at dusk. y can go negative at night.
+    atmo.sunDir = glm::normalize(glm::vec3(
+        std::cos(a),
+        std::sin(a) * 0.72f,
+        std::sin(a) * 0.70f));
+    atmo.moonDir = glm::normalize(-atmo.sunDir);
+
+    const float elev = atmo.sunDir.y;
+    const float sunVis = glm::smoothstep(-0.10f, 0.18f, elev);
+    const glm::vec3 noonSun(1.00f, 0.97f, 0.88f);
+    const glm::vec3 duskSun(1.00f, 0.50f, 0.22f);
+    const float horizonWarm = glm::clamp(
+        dusk * 0.90f + dawn * 0.70f +
+        (1.0f - glm::smoothstep(0.04f, 0.38f, elev)) * sunVis * 0.40f,
+        0.0f, 1.0f);
+    const glm::vec3 sunRgb = glm::mix(noonSun, duskSun, horizonWarm);
+    atmo.sunColor = sunRgb * (sunVis * SUN_STRENGTH);
+    atmo.sunDiscColor = sunRgb * sunVis;
+    const float moonVis = glm::smoothstep(0.12f, -0.08f, elev);
+    atmo.moonColor = glm::vec3(0.55f, 0.66f, 0.95f) * (moonVis * MOON_STRENGTH);
+    atmo.moonDiscColor = glm::vec3(0.78f, 0.82f, 0.95f) * moonVis;
+
+    glm::vec3 gi = glm::mix(atmo.skyHorizon, atmo.skyTop, 0.50f);
+    const float lum = glm::dot(gi, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+    glm::vec3 tint = glm::mix(glm::vec3(1.0f), gi / glm::max(lum, 0.08f), 0.38f);
+    tint = glm::mix(tint, glm::vec3(1.06f, 0.72f, 0.48f), dusk * 0.45f + dawn * 0.28f);
+    atmo.skyLightColor = tint * glm::mix(NIGHT_DAY_FACTOR * 0.92f, SKY_GI_STRENGTH, day01);
+
     return atmo;
 }
 

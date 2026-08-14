@@ -55,6 +55,10 @@ void SkyRenderer::Render(const Camera& camera, bool underwater,
     m_shader->SetVector3f("skyHorizon", atmosphere.skyHorizon);
     m_shader->SetVector3f("underwaterColor",
                           UNDERWATER_FOG_R, UNDERWATER_FOG_G, UNDERWATER_FOG_B);
+    m_shader->SetVector3f("sunDir", atmosphere.sunDir);
+    m_shader->SetVector3f("sunDiscColor", atmosphere.sunDiscColor);
+    m_shader->SetVector3f("moonDir", atmosphere.moonDir);
+    m_shader->SetVector3f("moonDiscColor", atmosphere.moonDiscColor);
 
     glBindVertexArray(m_vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

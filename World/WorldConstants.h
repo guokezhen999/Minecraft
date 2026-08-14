@@ -138,8 +138,11 @@ constexpr float WORLD_TIME_SCALE = 4.0f;
 constexpr float TIME_FAST_FORWARD = 10.0f;
 // Moonlight scale on sky light (night is dimmer than day, not black).
 constexpr float NIGHT_DAY_FACTOR = 0.15f;
-// Base visibility for non-emissive blocks (caves, night, AO corners).
-constexpr float AMBIENT_BRIGHTNESS = 0.0f;
+// Direct sun vs sky fill. Keep sun stronger so east/west/south walls read clearly.
+constexpr float SUN_STRENGTH = 0.88f;
+constexpr float MOON_STRENGTH = 0.22f;
+constexpr float SKY_GI_STRENGTH = 0.40f;
+// Noon sun sits in the southern sky (~50°), not at zenith — otherwise all walls look the same.
 
 struct Atmosphere {
     float dayFactor = 1.0f;
@@ -148,6 +151,13 @@ struct Atmosphere {
     glm::vec3 fogColor{FOG_R, FOG_G, FOG_B};
     float fogStart = FOG_START;
     float fogEnd = FOG_END;
+    glm::vec3 sunDir{0.0f, 0.75f, 0.66f};
+    glm::vec3 sunColor{SUN_STRENGTH, SUN_STRENGTH * 0.96f, SUN_STRENGTH * 0.90f};
+    glm::vec3 skyLightColor{SKY_GI_STRENGTH, SKY_GI_STRENGTH, SKY_GI_STRENGTH};
+    glm::vec3 sunDiscColor{1.0f, 0.96f, 0.88f};
+    glm::vec3 moonDir{0.0f, -1.0f, 0.0f};
+    glm::vec3 moonColor{0.0f};
+    glm::vec3 moonDiscColor{0.0f};
 };
 
 #endif //MINECRAFT_WORLDCONSTANTS_H

@@ -1,5 +1,5 @@
 //
-// ChunkSection.cpp – mesh build with cardinal light + corner AO
+// ChunkSection.cpp – mesh build with corner AO; sun/sky lighting is in the shader
 //
 
 #include "ChunkSection.h"
@@ -8,13 +8,6 @@
 #include "../World.h"
 
 #include <array>
-
-namespace {
-constexpr float LIGHT_TOP = 1.00f;
-constexpr float LIGHT_X   = 0.90f;
-constexpr float LIGHT_Z   = 0.82f;
-constexpr float LIGHT_BOT = 0.72f;
-} // namespace
 
 ChunkSection::ChunkSection(const glm::ivec3& position)
     : m_location(position)
@@ -112,10 +105,10 @@ int ChunkSection::vertexAO(bool side1, bool side2, bool corner) {
     return 3 - static_cast<int>(side1) - static_cast<int>(side2) - static_cast<int>(corner);
 }
 
-float ChunkSection::shadeAO(int ao, float cardinal) {
+float ChunkSection::shadeAO(int ao) {
     // ao ∈ [0,3] → milder corner darkening so small holes stay readable
     static constexpr float kTable[4] = {0.78f, 0.86f, 0.94f, 1.0f};
-    return kTable[ao] * cardinal;
+    return kTable[ao];
 }
 
 void ChunkSection::sampleCornerLight(const World& world,
@@ -247,7 +240,7 @@ void ChunkSection::buildMesh(const World& world) {
                         0.0f, 1.0f, 0.0f,
                     };
                     m_meshes.floraMesh.addFace(face1, texCoords, m_location, blockPos,
-                                               LIGHT_TOP, sky, blockL);
+                                               1.0f, sky, blockL, FaceId::FloraA);
 
                     std::array<GLfloat, 12> face2 = {
                         0.0f, 0.0f, 1.0f,
@@ -256,7 +249,7 @@ void ChunkSection::buildMesh(const World& world) {
                         0.0f, 1.0f, 1.0f,
                     };
                     m_meshes.floraMesh.addFace(face2, texCoords, m_location, blockPos,
-                                               LIGHT_TOP, sky, blockL);
+                                               1.0f, sky, blockL, FaceId::FloraB);
                 }
             }
         }
@@ -310,7 +303,7 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
             0.0f, h, 0.0f,
         };
         sampleCellLight(world, x, y + 1, z, sky, blockL);
-        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_TOP, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, 1.0f, sky, blockL, FaceId::PosY);
     }
 
     // Bottom
@@ -323,14 +316,14 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
             0.0f, 0.0f, 1.0f,
         };
         sampleCellLight(world, x, y - 1, z, sky, blockL);
-        mesh.addFace(face, texCoords, m_location, blockPos, LIGHT_BOT, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, 1.0f, sky, blockL, FaceId::NegY);
     }
 
-    auto addSide = [&](std::array<GLfloat, 12> face, float light, int nx, int ny, int nz) {
+    auto addSide = [&](std::array<GLfloat, 12> face, float faceId, int nx, int ny, int nz) {
         if (!shouldDrawWaterSide(world, nx, ny, nz, h))
             return;
         sampleCellLight(world, nx, ny, nz, sky, blockL);
-        mesh.addFace(face, texCoords, m_location, blockPos, light, sky, blockL);
+        mesh.addFace(face, texCoords, m_location, blockPos, 1.0f, sky, blockL, faceId);
     };
 
     addSide({
@@ -338,32 +331,32 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
                 1.0f, 0.0f, 0.0f,
                 1.0f, h,    0.0f,
                 1.0f, h,    1.0f,
-            }, LIGHT_X, x + 1, y, z);
+            }, FaceId::PosX, x + 1, y, z);
 
     addSide({
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 1.0f,
                 0.0f, h,    1.0f,
                 0.0f, h,    0.0f,
-            }, LIGHT_X, x - 1, y, z);
+            }, FaceId::NegX, x - 1, y, z);
 
     addSide({
                 0.0f, 0.0f, 1.0f,
                 1.0f, 0.0f, 1.0f,
                 1.0f, h,    1.0f,
                 0.0f, h,    1.0f,
-            }, LIGHT_Z, x, y, z + 1);
+            }, FaceId::PosZ, x, y, z + 1);
 
     addSide({
                 1.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
                 0.0f, h,    0.0f,
                 1.0f, h,    0.0f,
-            }, LIGHT_Z, x, y, z - 1);
+            }, FaceId::NegZ, x, y, z - 1);
 }
 
 // ----------------------------------------------------------------------------
-// Face Generation Helpers (cardinal × corner AO)
+// Face Generation Helpers (corner AO; face id for shader sun/sky)
 // ----------------------------------------------------------------------------
 
 void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -387,7 +380,7 @@ void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x + 1, y + yDir, z);
         const bool s2 = occludesAO(world, x + 1, y, z + zDir);
         const bool c  = occludesAO(world, x + 1, y + yDir, z + zDir);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x + 1, y, z,
                           x + 1, y + yDir, z,
@@ -399,7 +392,7 @@ void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::PosX);
 }
 
 void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -423,7 +416,7 @@ void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x - 1, y + yDir, z);
         const bool s2 = occludesAO(world, x - 1, y, z + zDir);
         const bool c  = occludesAO(world, x - 1, y + yDir, z + zDir);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_X);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x - 1, y, z,
                           x - 1, y + yDir, z,
@@ -435,7 +428,7 @@ void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::NegX);
 }
 
 void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -459,7 +452,7 @@ void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x + xDir, y + 1, z);
         const bool s2 = occludesAO(world, x, y + 1, z + zDir);
         const bool c  = occludesAO(world, x + xDir, y + 1, z + zDir);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_TOP);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x, y + 1, z,
                           x + xDir, y + 1, z,
@@ -471,7 +464,7 @@ void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::PosY);
 }
 
 void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -495,7 +488,7 @@ void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x + xDir, y - 1, z);
         const bool s2 = occludesAO(world, x, y - 1, z + zDir);
         const bool c  = occludesAO(world, x + xDir, y - 1, z + zDir);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_BOT);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x, y - 1, z,
                           x + xDir, y - 1, z,
@@ -507,7 +500,7 @@ void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::NegY);
 }
 
 void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -531,7 +524,7 @@ void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x + xDir, y, z + 1);
         const bool s2 = occludesAO(world, x, y + yDir, z + 1);
         const bool c  = occludesAO(world, x + xDir, y + yDir, z + 1);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x, y, z + 1,
                           x + xDir, y, z + 1,
@@ -543,7 +536,7 @@ void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::PosZ);
 }
 
 void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
@@ -567,7 +560,7 @@ void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, con
         const bool s1 = occludesAO(world, x + xDir, y, z - 1);
         const bool s2 = occludesAO(world, x, y + yDir, z - 1);
         const bool c  = occludesAO(world, x + xDir, y + yDir, z - 1);
-        shades[i] = shadeAO(vertexAO(s1, s2, c), LIGHT_Z);
+        shades[i] = shadeAO(vertexAO(s1, s2, c));
         sampleCornerLight(world,
                           x, y, z - 1,
                           x + xDir, y, z - 1,
@@ -579,5 +572,5 @@ void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, con
     ChunkMesh* targetMesh = block.GetData().shaderType == BlockShaderType::Liquid
                                 ? &m_meshes.waterMesh : &m_meshes.solidMesh;
     targetMesh->addFace(face, texCoords, m_location, glm::ivec3(x, y, z),
-                        shades, skies, blocks);
+                        shades, skies, blocks, FaceId::NegZ);
 }

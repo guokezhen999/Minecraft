@@ -11,6 +11,17 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+namespace FaceId {
+constexpr float PosX = 0.0f;
+constexpr float NegX = 1.0f;
+constexpr float PosY = 2.0f;
+constexpr float NegY = 3.0f;
+constexpr float PosZ = 4.0f;
+constexpr float NegZ = 5.0f;
+constexpr float FloraA = 6.0f;
+constexpr float FloraB = 7.0f;
+}
+
 class ChunkMesh {
 public:
     ChunkMesh() = default;
@@ -19,7 +30,7 @@ public:
                  const std::array<GLfloat, 8> &textureCoords,
                  const glm::ivec3 &chunkPosition,
                  const glm::ivec3 &blockPosition,
-                 GLfloat shade, GLfloat sky, GLfloat block);
+                 GLfloat shade, GLfloat sky, GLfloat block, GLfloat faceId);
 
     void addFace(const std::array<GLfloat, 12> &blockFace,
                  const std::array<GLfloat, 8> &textureCoords,
@@ -27,7 +38,8 @@ public:
                  const glm::ivec3 &blockPosition,
                  const std::array<GLfloat, 4> &shade,
                  const std::array<GLfloat, 4> &sky,
-                 const std::array<GLfloat, 4> &block);
+                 const std::array<GLfloat, 4> &block,
+                 GLfloat faceId);
 
     // Drop CPU vertex data without touching GPU
     void clearCPU();
@@ -45,6 +57,7 @@ private:
     Mesh m_mesh;
     Model m_model;
     std::vector<GLfloat> m_light;
+    std::vector<GLfloat> m_normal;
     GLuint m_indexIndex = 0;
 };
 

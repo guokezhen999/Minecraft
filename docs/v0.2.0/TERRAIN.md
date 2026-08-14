@@ -2,12 +2,14 @@
 
 仍是 2D：先算地面高度 Y，再纵向填方块。不上 3D 密度、不做洞穴。
 
+v0.2.0 已按本规划落地。v0.3.0 起地表草只存 `Grass`，外观在建网时按群系换贴图，见 [INVENTORY.md](../v0.3.0/INVENTORY.md)。下文 `SavannaGrass` / `TaigaGrass` / `TundraGrass` 指外观，不是存档 id。
+
 ---
 
 ## 目标
 
 - 岸边不强制沙子（温湿地带草地可直接接水）
-- 沙漠与恶地：沙 / 陶瓦 → 石头；山体极其平缓或为台地
+- 沙漠与戈壁：热带沙漠是沙 → 沙砖 → 石头；温带戈壁是沙石地表，地下直接接石头；山体极其平缓
 - 极地雪原：整片积雪，水面结冰（寒漠，不是苔原）
 - 苔原：林木线以北的低植被地带——苔藓土 + 残雪 + 碎石，无树，水面不结冰
 - 针叶林：云杉林，水面不结冰
@@ -43,7 +45,7 @@ C ≥ -0.28 且看 (T, M)：
 | 温度区间 | 湿度区间 | 群系名 (`BiomeType`) | 说明 |
 | :--- | :--- | :--- | :--- |
 | **$T \ge 0.3$ (热带)** | $M < -0.2$<br>$-0.2 \le M < 0.4$<br>$M \ge 0.4$ | **Desert** (热带沙漠)<br>**Savanna** (热带草原)<br>**Jungle** (热带雨林) | 沙丘，仙人掌<br>稀树，黄绿草<br>巨木，极密植被 |
-| **$-0.2 \le T < 0.3$ (温带)** | $M < -0.4$<br>$-0.4 \le M < 0.2$ <br>$M \ge 0.2$ | **TemperateDesert** (温带沙漠)<br>**Grassland** (温带草原)<br>**Forest** (温带森林) | 砾石，荒凉<br>平坦草地，无树<br>橡树林，花草茂盛 |
+| **$-0.2 \le T < 0.3$ (温带)** | $M < -0.4$<br>$-0.4 \le M < 0.2$ <br>$M \ge 0.2$ | **TemperateDesert** (温带沙漠)<br>**Grassland** (温带草原)<br>**Forest** (温带森林) | 砾石，荒凉<br>开阔草地，树极稀<br>橡树林，花草茂盛 |
 | **$-0.6 \le T < -0.2$ (亚寒带)** | $M < 0.0$<br>$M \ge 0.0$ | **Tundra** (苔原)<br>**Taiga** (针叶林) | 苔藓土、残雪、碎石；无树<br>云杉林，阴冷多山 |
 | **$T < -0.6$ (寒带)** | 任意 $M$ | **SnowyPlains** (极地雪原) | 终年积雪，极寒无树 |
 
@@ -56,7 +58,7 @@ C ≥ -0.28 且看 (T, M)：
 为了在游戏中将它们直观地表现出来，我们在代码的四个核心层面做了如下实现设计：
 
 ### 1. 地形起伏与高度系数
-在 [`WorldConstants.h`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/WorldConstants.h) 中配置不同的起伏乘数，决定地表的平坦度与山脉高度：
+在 [`WorldConstants.h`](../../World/WorldConstants.h) 中配置不同的起伏乘数，决定地表的平坦度与山脉高度：
 - **热带沙漠 (`Desert`)**：只留很矮的沙丘起伏，绝对无大山（`hillAmp = 0.35, mountAmp = 0.0`）。
 - **温带沙漠 (`TemperateDesert`)**：地形整体低矮，但允许生成少量硬质的风化石丘（`hillAmp = 0.40, mountAmp = 0.10`）。
 - **热带草原 (`Savanna`)**：平缓的草原丘陵，偶尔出露小型平顶山（`hillAmp = 0.60, mountAmp = 0.15`）。
@@ -65,8 +67,8 @@ C ≥ -0.28 且看 (T, M)：
 ### 2. 纵向方块分层（`getBlock` 填充）
 - **热带沙漠 (`Desert`)**：表面是厚达 3~4 格的沙子（`Sand`），下方叠有约 8 格的沙砖（`Sandstone`），极深处才是基岩石头。
 - **温带沙漠 (`TemperateDesert` / 戈壁)**：薄沙层，地表 60% 概率为沙子、40% 概率直接暴露石头，地下直接过渡为石头（`Stone`），无深沙砖层。
-- **热带草原 (`Savanna`)**：表面覆盖偏黄色的草原草块（`SavannaGrass`），其下为泥土（`Dirt`）。
-- **温带草原 (`Grassland`)**：表面覆盖标准翠绿草块（`Grass`），其下为泥土（`Dirt`）。
+- **热带草原 (`Savanna`)**：表面存 `Grass`，建网时换成黄绿草皮，其下为泥土（`Dirt`）。
+- **温带草原 (`Grassland`)**：表面存 `Grass`（翠绿草皮），其下为泥土（`Dirt`）。
 
 ### 3. 树木生成判定（`shouldPlaceTree` / `placeDecorations`）
 - **树木概率**：
@@ -105,7 +107,7 @@ C ≥ -0.28 且看 (T, M)：
 现有幅度已经合适，苔原比针叶林平、比雪原略有起伏，避免无树雪山：
 
 - **SnowyPlains**：`hillAmp = 0.5, mountAmp = 0.2`
-- **Tundra**：`hillAmp = 0.6, mountAmp = 0.3`（可再把 `mountAmp` 压到 `0.15`）
+- **Tundra**：`hillAmp = 0.6, mountAmp = 0.3`
 - **Taiga**：`hillAmp = 0.9, mountAmp = 0.8`
 
 热喀斯特浅塘（河之外再挖浅坑）作为第二阶段，第一阶段有河即可。
@@ -114,11 +116,11 @@ C ≥ -0.28 且看 (T, M)：
 
 - **SnowyPlains**：表面整片 `Snow`，其下泥土，再往下石头。水面最上一格 `Ice`。
 - **Tundra**：表面**不要**整片雪。按列 `columnRoll` 混合（与戈壁沙/石同一写法）：
-  - 约 **60%** `TundraGrass`（橄榄褐/灰绿苔藓土）
+  - 约 **60%** `Grass`（建网时换成苔藓土）
   - 约 **25%** `Snow`（洼地、阴坡残雪）
   - 约 **15%** `Stone`（冻融碎石滩 / fellfield）
   - 其下仍是三层泥土再接石头（泥炭 / 冻土）。不要沙、不要沙砖。
-- **Taiga**：表面 `TaigaGrass`，其下泥土再石头。水面保持水。
+- **Taiga**：表面 `Grass`（建网时换成针叶林草），其下泥土再石头。水面保持水。
 
 ### 4. 树木
 
@@ -171,8 +173,8 @@ height = lerp(height, target, mask)
 
 - **地表**：
   - `SnowyPlains` 的 `y == height` $\rightarrow$ 整片 `Snow`（整格实心，可碰撞，材质为雪顶）。
-  - `Tundra` 的 `y == height` $\rightarrow$ `TundraGrass` / `Snow` / `Stone` 按列混合（见上节），不是整片雪。
-  - `Taiga` 的 `y == height` $\rightarrow$ `TaigaGrass`。
+  - `Tundra` 的 `y == height` $\rightarrow$ `Grass` / `Snow` / `Stone` 按列混合（见上节），不是整片雪。
+  - `Taiga` 的 `y == height` $\rightarrow$ `Grass`。
 - **水面结冰**：仅 `SnowyPlains` 把 **最上面那一格水** 换成 `Ice`，下面仍是水。`Tundra` 与 `Taiga` 不结冰。
 - **Ice 属性**：实心、可站立、不是流体，`lightOpacity` 建议 2。不结整柱冰，避免挖不开的冰海。
 
@@ -192,13 +194,13 @@ h = WATER_LEVEL + 2
 | :--- | :--- | :--- | :--- | :--- |
 | **Ocean** | Sand | 沙 → 石 | — | 浅海盆地 |
 | **SnowyPlains** | Snow | 雪 → 土 → 石 | 0.5 | 0.2 |
-| **Tundra** | TundraGrass / Snow / Stone | 苔藓土或雪或石 → 土 → 石 | 0.6 | 0.3 |
-| **Taiga** | TaigaGrass | 针叶林草 → 土 → 石 | 0.9 | 0.8 |
+| **Tundra** | Grass / Snow / Stone | 苔藓土或雪或石 → 土 → 石 | 0.6 | 0.3 |
+| **Taiga** | Grass | 针叶林草 → 土 → 石 | 0.9 | 0.8 |
 | **TemperateDesert**| Sand / Stone | 砂砾/薄沙 → 石 | 0.4 | 0.1 |
 | **Grassland** | Grass | 草 → 土 → 石 | 0.5 | 0.2 |
 | **Forest** | Grass | 草 → 土 → 石 | 1.0 | 1.0 |
 | **Desert** | Sand | 沙 (3~4格) → 沙砖 (8格) → 石 | 0.35 | 0.0 (只叠矮沙丘) |
-| **Savanna** | SavannaGrass | 草草原 → 土 → 石 | 0.6 | 0.15 |
+| **Savanna** | Grass | 黄绿草 → 土 → 石 | 0.6 | 0.15 |
 | **Jungle** | Grass | 草 → 土 → 石 | 1.2 | 0.9 |
 
 ---
@@ -218,14 +220,14 @@ h = WATER_LEVEL + 2
 | **Forest** | 橡木 (Oak)，`base ≈ 1/18` | 高草 `1/28`，玫瑰 `1/120` |
 | **Desert** | 无 | 边缘：仙人掌 `1/64`，枯灌 `1/32`；深处无 |
 | **Savanna** | 稀树金合欢 (Savanna)，`base ≈ 1/90` | 草原高草 `1/48` |
-| **Jungle** | 雨林巨木 (Jungle)，`base ≈ 1/22` (高8-15格) | 蕨类 `1/12`，藤蔓，西瓜 `1/100` |
+| **Jungle** | 雨林巨木 (Jungle)，`base ≈ 1/22` (高8-15格) | 蕨类 `1/12` |
 
 ---
 
 ## 新增方块与贴图位置规划
 
 ### 已实现
-在 [`BlockId`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/Block/BlockId.h) 尾部追加：
+在 [`BlockId`](../../World/Block/BlockId.h) 尾部追加：
 * `SpruceBark` (针叶木干)、`SpruceLeaf` (针叶树叶)
 * `JungleBark` (雨林木干)、`JungleLeaf` (雨林树叶)
 * `Fern` (蕨类地表草)
@@ -245,11 +247,9 @@ y > height:
 y == height:
     Ocean / Desert → 沙
     TemperateDesert → 沙（60%）或石头（40%）
-    Forest / Grassland / Jungle → Grass
-    Taiga → TaigaGrass
-    Savanna → SavannaGrass
+    Forest / Grassland / Jungle / Savanna / Taiga → Grass
     SnowyPlains → Snow
-    Tundra → TundraGrass（60%）或 Snow（25%）或 Stone（15%）
+    Tundra → Grass（60%）或 Snow（25%）或 Stone（15%）
 height-3..height-1:
     Desert / Ocean → 沙
     TemperateDesert → 石头（戈壁石床）
@@ -274,15 +274,15 @@ height-11..height-4:
 
 ## 代码修改分布指南
 
-1. **[`WorldConstants.h`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/WorldConstants.h)**:
-   * 追加 4 个温度带和干湿度阈值常量，并扩充 9 个群系的 relief amp 常量。
-2. **[`TerrainGenerator.h`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/TerrainGenerator.h)** / **[`TerrainGenerator.cpp`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/TerrainGenerator.cpp)**:
-   * 扩充 [`BiomeType`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/TerrainGenerator.h#L12-L18) 枚举，重构判定、高度混合、[`TerrainGenerator::getBlock`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/TerrainGenerator.cpp#L301) 及树木概率。
+1. **[`WorldConstants.h`](../../World/WorldConstants.h)**:
+   * 追加 4 个温度带和干湿度阈值常量，并扩充陆地群系的 relief amp 常量。
+2. **[`TerrainGenerator.h`](../../World/TerrainGenerator.h)** / **[`TerrainGenerator.cpp`](../../World/TerrainGenerator.cpp)**:
+   * 扩充 [`BiomeType`](../../World/TerrainGenerator.h) 枚举，重构判定、高度混合、[`TerrainGenerator::getBlock`](../../World/TerrainGenerator.cpp) 及树木概率。
    * `isColdBiome` **只含** `SnowyPlains`（结冰）。`Tundra` / `Taiga` 水面保持水。
-   * 苔原表面用 `columnRoll` 混 `TundraGrass` / `Snow` / `Stone`。
-3. **[`World.cpp`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/World.cpp)**:
+   * 苔原表面用 `columnRoll` 混 `Grass` / `Snow` / `Stone`。
+3. **[`World.cpp`](../../World/World.cpp)**:
    * 编写 `placeSpruceTree` 和 `placeJungleTree` 特有树形生成方法。
-   * 更新 [`World::placeDecorations`](file:///Users/guokezhen/Desktop/计算机/计算机图形学/LearnOpengl/游戏/Minecraft/World/World.cpp#L672) 适配 9 群系的草、花、蕨及枯灌木生成。
+   * 更新 [`World::placeDecorations`](../../World/World.cpp) 适配各群系的草、花、蕨及枯灌木生成。
    * 苔原：蕨 `1/14` + 枯灌木 `1/40`；不种树。
 
 ---

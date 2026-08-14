@@ -20,6 +20,7 @@ struct Config
     float mouseSensitivity = 0.10f;
     bool vsync = true;
     bool showSunMoon = true;
+    bool fixedNoon = false;
     std::string lastWorld;
 };
 

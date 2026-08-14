@@ -2,6 +2,8 @@
 
 v0.1.0 已按本规划落地。摘要见 [OVERALL.md](OVERALL.md)。光图不写入存档，见 [LIGHTING.md](LIGHTING.md)。
 
+之后补上的：创造背包（v0.3.0，见 [INVENTORY.md](../v0.3.0/INVENTORY.md)）；设置里的太阳/月亮、固定正午；`settings.cfg` 的窗口位置。
+
 ---
 
 ## 目标
@@ -26,20 +28,23 @@ Title ──┬── Worlds ──┬── CreateWorld
         ├── Settings
         └── Quit
 
-Playing ── ESC ── Paused ──┬── Resume
-                           ├── Worlds / CreateWorld   （切档前 flush）
-                           ├── Settings
-                           ├── Save & Title
-                           └── Quit
+Playing ──┬── ESC ── Paused ──┬── Resume
+          │                   ├── Worlds / CreateWorld   （切档前 flush）
+          │                   ├── Settings
+          │                   ├── Save & Title
+          │                   └── Quit
+          └── E ── Inventory ── E / ESC ── Playing
 ```
 
 | 状态 | 鼠标 | 世界 | 模拟 |
 |---|---|---|---|
 | Title / Worlds / CreateWorld / Settings（未进游戏） | 自由 | 无 | — |
 | Playing | 捕获 | 有 | 跑 |
+| Inventory | 自由 | 有 | 停 |
 | Paused 及从暂停打开的 Worlds / Settings | 自由 | 有，留内存 | 停 |
 
 - Playing + ESC → Paused，松鼠标
+- Playing + E → Inventory；E 或 ESC 回 Playing
 - 子菜单 + ESC → 上一级，**不关窗口**
 - 退出只走菜单「退出游戏」
 - 失焦：松鼠标并进暂停
@@ -102,6 +107,8 @@ Playing ── ESC ── Paused ──┬── Resume
 | 鼠标灵敏度 | 0.04–0.30，默认 0.10 | 立刻 |
 | 垂直同步 | 开 / 关 | 立刻 `glfwSwapInterval` |
 | 全屏 | 开 / 关 | 立刻；关时回到 `windowX/Y` |
+| 太阳 / 月亮 | 开 / 关 | 立刻；关则地面退回旧方向明暗，天空不画圆盘 |
+| 固定正午 | 开 / 关 | 立刻；开则 tick 锁在 6000，`T` 无效 |
 
 视距：`World` 持有 `m_renderDistance`，卸载距离 = 视距 + 2；雾 / 花草 LOD 按当前视距算。
 
@@ -140,9 +147,13 @@ Fov 90
 RenderDistance 10
 MouseSensitivity 0.10
 Vsync 1
+SunMoon 1
+FixedNoon 0
 Fullscreen 0
 WindowWidth 1280
 WindowHeight 720
+WindowPosX 100
+WindowPosY 100
 LastWorld my_world
 ```
 

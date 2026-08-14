@@ -2,6 +2,8 @@
 
 v0.1.0 已按本规划落地。摘要见 [OVERALL.md](OVERALL.md)。
 
+v0.3.0 改了着色器**怎么用**这些光（Lambert + 天空 GI + 月亮），见 [DAYLIGHT_GI.md](../v0.3.0/DAYLIGHT_GI.md)。下面的 `shade × dayFactor` 和 `brightness` 是 v0.1.0 当时的公式；光图规则、opacity / emission、火把、存档不存光，后面都没改。
+
 ---
 
 ## 目标
@@ -135,7 +137,7 @@ location 4: aBlock
 light = max(brightness(aSky/15) * dayFactor, brightness(aBlock/15))
 ```
 
-`ChunkRenderer` 每帧设 `dayFactor`、`fogColor`；天空色随时间插值。世界 tick 周期 24000，按住 `T` 加速。不必做太阳 / 月亮网格。水下继续用现有雾，不要再做一套水下光。
+`ChunkRenderer` 每帧设 `dayFactor`、`fogColor`；天空色随时间插值。世界 tick 周期 24000，按住 `T` 加速。v0.1.0 不做太阳 / 月亮网格；圆盘是 v0.3.0 在天空着色器里画的。水下继续用现有雾，不要再做一套水下光。
 
 ---
 

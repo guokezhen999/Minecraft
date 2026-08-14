@@ -92,8 +92,11 @@ void Game::setupTitleCamera()
 void Game::Render(int windowWidth, int windowHeight)
 {
     Atmosphere atmo;
-    if (m_World)
+    if (m_World) {
+        if (m_Config.fixedNoon)
+            m_World->setWorldTick(TICK_NOON);
         atmo = m_World->getAtmosphere();
+    }
     if (!m_Config.showSunMoon) {
         atmo.celestial = false;
         atmo.sunDiscColor = glm::vec3(0.0f);
@@ -162,18 +165,23 @@ void Game::Update(float deltaTime)
 
     m_cameraUnderwater = m_World->isCameraUnderwater(m_Camera->Position);
 
-    m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) * WORLD_TIME_SCALE;
-    if (Keys[GLFW_KEY_T]) {
-        m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) *
-                     WORLD_TIME_SCALE * (TIME_FAST_FORWARD - 1.0f);
+    if (m_Config.fixedNoon) {
+        m_tickAcc = 0.0f;
+        m_World->setWorldTick(TICK_NOON);
+    } else {
+        m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) * WORLD_TIME_SCALE;
+        if (Keys[GLFW_KEY_T]) {
+            m_tickAcc += deltaTime * static_cast<float>(TICKS_PER_SECOND) *
+                         WORLD_TIME_SCALE * (TIME_FAST_FORWARD - 1.0f);
+        }
+        int ticks = 0;
+        while (m_tickAcc >= 1.0f) {
+            m_tickAcc -= 1.0f;
+            ++ticks;
+        }
+        if (ticks > 0)
+            m_World->advanceTime(ticks);
     }
-    int ticks = 0;
-    while (m_tickAcc >= 1.0f) {
-        m_tickAcc -= 1.0f;
-        ++ticks;
-    }
-    if (ticks > 0)
-        m_World->advanceTime(ticks);
 
     updateTargetBlock();
 }
@@ -977,7 +985,7 @@ void Game::drawSettings(MenuContext& ctx)
     const float g = gap(ctx);
     const float rowH = 28.0f * s;
     const float panelH = 56.0f * s + 3.0f * (20.0f * s + rowH + g)
-                       + 4.0f * (bh + g) + 12.0f * s;
+                       + 5.0f * (bh + g) + 12.0f * s;
     const float px = (ctx.width - panelW) * 0.5f;
     const float py = (ctx.height - panelH) * 0.5f;
 
@@ -1041,6 +1049,12 @@ void Game::drawSettings(MenuContext& ctx)
     y += bh + g;
     if (menuToggle(ctx, bx, y, bw, bh, "Sun / Moon", m_Config.showSunMoon))
         persistSettings();
+    y += bh + g;
+    if (menuToggle(ctx, bx, y, bw, bh, "Fixed Noon", m_Config.fixedNoon)) {
+        persistSettings();
+        if (m_Config.fixedNoon && m_World)
+            m_World->setWorldTick(TICK_NOON);
+    }
     y += bh + g;
     if (menuButton(ctx, bx, y, bw, bh, "Back")) {
         persistSettings();

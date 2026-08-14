@@ -301,14 +301,14 @@ Atmosphere World::getAtmosphere() const {
     const glm::vec3 duskSun(1.00f, 0.50f, 0.22f);
     const float horizonWarm = glm::clamp(
         dusk * 0.90f + dawn * 0.70f +
-        (1.0f - glm::smoothstep(0.04f, 0.38f, elev)) * sunVis * 0.40f,
+        (1.0f - glm::smoothstep(0.02f, 0.22f, elev)) * sunVis * 0.45f,
         0.0f, 1.0f);
     const glm::vec3 sunRgb = glm::mix(noonSun, duskSun, horizonWarm);
     atmo.sunColor = sunRgb * (sunVis * SUN_STRENGTH);
     atmo.sunDiscColor = sunRgb * sunVis;
     const float moonVis = glm::smoothstep(0.12f, -0.08f, elev);
-    atmo.moonColor = glm::vec3(0.55f, 0.66f, 0.95f) * (moonVis * MOON_STRENGTH);
-    atmo.moonDiscColor = glm::vec3(0.78f, 0.82f, 0.95f) * moonVis;
+    atmo.moonColor = glm::vec3(0.90f, 0.78f, 0.48f) * (moonVis * MOON_STRENGTH);
+    atmo.moonDiscColor = glm::vec3(1.00f, 0.92f, 0.68f) * moonVis;
 
     glm::vec3 gi = glm::mix(atmo.skyHorizon, atmo.skyTop, 0.50f);
     const float lum = glm::dot(gi, glm::vec3(0.2126f, 0.7152f, 0.0722f));
@@ -322,6 +322,10 @@ Atmosphere World::getAtmosphere() const {
 bool World::isChunkLoaded(int cx, int cz) const {
     std::shared_lock<std::shared_mutex> lock(m_chunkMutex);
     return m_chunks.count(chunkKey(cx, cz)) > 0;
+}
+
+BiomeType World::getBiome(int worldX, int worldZ) const {
+    return m_generator.getBiome(worldX, worldZ);
 }
 
 int World::getSurfaceHeight(int worldX, int worldZ) const {
@@ -830,10 +834,10 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz,
                 continue;
             }
 
-            // Tundra: sedge/moss tufts on TundraGrass; dwarf shrubs on moss or leftover snow
+            // Tundra: sedge/moss tufts on grass; dwarf shrubs on moss or leftover snow
             if (biome == BiomeType::Tundra &&
-                (surface == BlockId::TundraGrass || surface == BlockId::Snow)) {
-                if (surface == BlockId::TundraGrass &&
+                (surface == BlockId::Grass || surface == BlockId::Snow)) {
+                if (surface == BlockId::Grass &&
                     m_generator.columnRoll(wx, wz, 660u) < (1.0f / 14.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::Fern);
@@ -865,14 +869,14 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz,
                 }
             }
             // Savanna
-            else if (biome == BiomeType::Savanna && surface == BlockId::SavannaGrass) {
+            else if (biome == BiomeType::Savanna && surface == BlockId::Grass) {
                 if (m_generator.columnRoll(wx, wz, 630u) < (1.0f / 48.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::SavannaTallGrass);
                 }
             }
             // Taiga
-            else if (biome == BiomeType::Taiga && surface == BlockId::TaigaGrass) {
+            else if (biome == BiomeType::Taiga && surface == BlockId::Grass) {
                 if (m_generator.columnRoll(wx, wz, 640u) < (1.0f / 20.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::Fern);
@@ -1228,8 +1232,8 @@ void World::Update(const glm::vec3& cameraPos) {
     updateFluids();
 }
 
-void World::Render(RenderMaster& master, const Camera& camera, bool underwater) {
-    const Atmosphere atmo = getAtmosphere();
+void World::Render(RenderMaster& master, const Camera& camera, bool underwater,
+                   const Atmosphere& atmo) {
     Frustum frustum;
     frustum.update(camera.GetProjectionViewMatrix());
 

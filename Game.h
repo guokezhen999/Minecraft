@@ -35,6 +35,7 @@ enum class GameScreen {
     CreateWorld,
     Settings,
     Playing,
+    Inventory,
     Paused
 };
 

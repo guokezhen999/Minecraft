@@ -34,14 +34,14 @@ struct WorldHeader {
     bool flying = false;
     std::array<int, Hotbar::SLOT_COUNT> hotbar{
         static_cast<int>(BlockId::Grass),
-        static_cast<int>(BlockId::SavannaGrass),
-        static_cast<int>(BlockId::Sandstone),
-        static_cast<int>(BlockId::SpruceBark),
-        static_cast<int>(BlockId::JungleBark),
-        static_cast<int>(BlockId::Ice),
-        static_cast<int>(BlockId::Snow),
-        static_cast<int>(BlockId::Fern),
+        static_cast<int>(BlockId::Dirt),
+        static_cast<int>(BlockId::Stone),
+        static_cast<int>(BlockId::OakBark),
+        static_cast<int>(BlockId::Sand),
+        static_cast<int>(BlockId::Water),
         static_cast<int>(BlockId::Torch),
+        static_cast<int>(BlockId::TallGrass),
+        static_cast<int>(BlockId::Snow),
     };
     int selected = 0;
     uint64_t gameTime = 6000; // noon; same default as World

@@ -4,6 +4,7 @@
 
 #include "ChunkSection.h"
 #include "../Block/BlockDataBase.h"
+#include "../Block/Grass.h"
 #include "../Block/Water.h"
 #include "../World.h"
 
@@ -174,6 +175,17 @@ void ChunkSection::sampleCellLight(const World& world, int x, int y, int z,
                           m_location.z * CHUNK_SIZE + z, s, b);
     sky = static_cast<float>(s);
     block = static_cast<float>(b);
+}
+
+const BlockDataHolder& ChunkSection::visualData(const World& world, int x, int z,
+                                                const ChunkBlock& block) const {
+    BlockId id = static_cast<BlockId>(block.id);
+    if (isGrassBlock(id)) {
+        const int wx = m_location.x * CHUNK_SIZE + x;
+        const int wz = m_location.z * CHUNK_SIZE + z;
+        id = grassAppearance(world.getBiome(wx, wz));
+    }
+    return BlockDatabase::Get().GetData(id).GetBlockData();
 }
 
 void ChunkSection::buildMesh(const World& world) {
@@ -361,7 +373,7 @@ void ChunkSection::addWaterBlock(const World& world, int x, int y, int z,
 
 void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texSideCoords);
+        visualData(world, x, z, block).texSideCoords);
     // Order: (y=0,z=1), (y=0,z=0), (y=1,z=0), (y=1,z=1)
     std::array<GLfloat, 12> face = {
         1.0f, 0.0f, 1.0f,
@@ -397,7 +409,7 @@ void ChunkSection::addXPositiveFace(const World& world, int x, int y, int z, con
 
 void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texSideCoords);
+        visualData(world, x, z, block).texSideCoords);
     // Order: (y=0,z=0), (y=0,z=1), (y=1,z=1), (y=1,z=0)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 0.0f,
@@ -433,7 +445,7 @@ void ChunkSection::addXNegativeFace(const World& world, int x, int y, int z, con
 
 void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texTopCoords);
+        visualData(world, x, z, block).texTopCoords);
     // Order: (-X+Z), (+X+Z), (+X-Z), (-X-Z)
     std::array<GLfloat, 12> face = {
         0.0f, 1.0f, 1.0f,
@@ -469,7 +481,7 @@ void ChunkSection::addYPositiveFace(const World& world, int x, int y, int z, con
 
 void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texBottomCoords);
+        visualData(world, x, z, block).texBottomCoords);
     // Order: (-X-Z), (+X-Z), (+X+Z), (-X+Z)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 0.0f,
@@ -505,7 +517,7 @@ void ChunkSection::addYNegativeFace(const World& world, int x, int y, int z, con
 
 void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texSideCoords);
+        visualData(world, x, z, block).texSideCoords);
     // Order: (x=0,y=0), (x=1,y=0), (x=1,y=1), (x=0,y=1)
     std::array<GLfloat, 12> face = {
         0.0f, 0.0f, 1.0f,
@@ -541,7 +553,7 @@ void ChunkSection::addZPositiveFace(const World& world, int x, int y, int z, con
 
 void ChunkSection::addZNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block) {
     auto texCoords = BlockDatabase::Get().atlas.GetTexture(
-        block.GetData().texSideCoords);
+        visualData(world, x, z, block).texSideCoords);
     // Order: (x=1,y=0), (x=0,y=0), (x=0,y=1), (x=1,y=1)
     std::array<GLfloat, 12> face = {
         1.0f, 0.0f, 0.0f,

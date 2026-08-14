@@ -390,6 +390,16 @@ bool loadSettings(Config& config) {
             int v = 1;
             iss >> v;
             config.vsync = v != 0;
+        } else if (key == "SunMoon") {
+            int v = 1;
+            iss >> v;
+            config.showSunMoon = v != 0;
+        } else if (key == "ShowSun" || key == "ShowMoon") {
+            // Old split toggles: either off means celestial lighting off.
+            int v = 1;
+            iss >> v;
+            if (v == 0)
+                config.showSunMoon = false;
         } else if (key == "Fullscreen") {
             int v = 0;
             iss >> v;
@@ -427,6 +437,7 @@ bool saveSettings(const Config& config) {
     out << "RenderDistance " << config.renderDistance << "\n";
     out << "MouseSensitivity " << config.mouseSensitivity << "\n";
     out << "Vsync " << (config.vsync ? 1 : 0) << "\n";
+    out << "SunMoon " << (config.showSunMoon ? 1 : 0) << "\n";
     out << "Fullscreen " << (config.isFullscreen ? 1 : 0) << "\n";
     out << "WindowWidth " << config.windowX << "\n";
     out << "WindowHeight " << config.windowY << "\n";

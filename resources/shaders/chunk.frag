@@ -20,6 +20,7 @@ uniform vec3 sunColor;
 uniform vec3 moonDir;
 uniform vec3 moonColor;
 uniform vec3 skyLightColor;
+uniform int celestial;
 
 uniform int underwater;
 uniform int liquidPass;
@@ -45,19 +46,34 @@ void main()
     float skyB = brightness(SkyLevel / 15.0);
     float blockB = brightness(BlockLevel / 15.0);
 
-    float sunN = max(dot(n, sunDir), 0.0);
-    float moonN = max(dot(n, moonDir), 0.0);
-    // Cross flora is double-sided
-    if (abs(n.y) < 0.15 && abs(n.x) > 0.35 && abs(n.z) > 0.35) {
-        sunN = 0.35 + 0.65 * abs(dot(n, sunDir));
-        moonN = 0.35 + 0.65 * abs(dot(n, moonDir));
+    vec3 light;
+    if (celestial != 0) {
+        float sunN = max(dot(n, sunDir), 0.0);
+        float moonN = max(dot(n, moonDir), 0.0);
+        if (abs(n.y) < 0.15 && abs(n.x) > 0.35 && abs(n.z) > 0.35) {
+            sunN = 0.35 + 0.65 * abs(dot(n, sunDir));
+            moonN = 0.35 + 0.65 * abs(dot(n, moonDir));
+        }
+        float hemi = mix(0.50, 1.0, clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+        vec3 daylight = skyB * (skyLightColor * hemi + sunColor * sunN + moonColor * moonN);
+        light = max(daylight, vec3(blockB) * TORCH);
+    } else {
+        float cardinal = 0.82;
+        if (abs(n.y) > 0.7)
+            cardinal = n.y > 0.0 ? 1.00 : 0.72;
+        else if (abs(n.x) > 0.7)
+            cardinal = 0.90;
+        float skyL = skyB * dayFactor;
+        light = vec3(max(skyL, blockB) * cardinal);
     }
-
-    float hemi = mix(0.50, 1.0, clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
-    vec3 daylight = skyB * (skyLightColor * hemi + sunColor * sunN + moonColor * moonN);
-    vec3 torch = vec3(blockB) * TORCH;
-    vec3 light = max(daylight, torch);
     vec3 lit = color.rgb * (Shade * light);
+    if (celestial == 0 && underwater == 0) {
+        float skyL = skyB * dayFactor;
+        if (skyL >= blockB) {
+            float night = 1.0 - smoothstep(0.42, 0.92, dayFactor);
+            lit *= mix(vec3(1.0), vec3(0.90, 0.93, 1.05), night);
+        }
+    }
 
     float dist = length(FragPos - cameraPos);
     float alpha = color.a;

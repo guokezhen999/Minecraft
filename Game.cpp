@@ -5,6 +5,7 @@
 #include "World/WorldConstants.h"
 #include "World/Block/BlockDataBase.h"
 #include "World/Block/Water.h"
+#include "World/Block/Grass.h"
 
 #include <algorithm>
 #include <cmath>
@@ -93,21 +94,32 @@ void Game::Render(int windowWidth, int windowHeight)
     Atmosphere atmo;
     if (m_World)
         atmo = m_World->getAtmosphere();
+    if (!m_Config.showSunMoon) {
+        atmo.celestial = false;
+        atmo.sunDiscColor = glm::vec3(0.0f);
+        atmo.moonDiscColor = glm::vec3(0.0f);
+        atmo.sunColor = glm::vec3(0.0f);
+        atmo.moonColor = glm::vec3(0.0f);
+    }
 
     if (m_skyRenderer)
         m_skyRenderer->Render(*m_Camera, m_cameraUnderwater && m_World != nullptr, atmo);
 
     if (m_World)
-        m_World->Render(m_RenderMaster, *m_Camera, m_cameraUnderwater);
+        m_World->Render(m_RenderMaster, *m_Camera, m_cameraUnderwater, atmo);
 
-    if (m_screen == GameScreen::Playing) {
-        if (m_target.hit && m_outlineRenderer)
+    if (m_screen == GameScreen::Playing || m_screen == GameScreen::Inventory) {
+        if (m_screen == GameScreen::Playing && m_target.hit && m_outlineRenderer)
             m_outlineRenderer->Render(*m_Camera, m_target.blockPos);
-        if (m_crosshairRenderer)
+        if (m_screen == GameScreen::Playing && m_crosshairRenderer)
             m_crosshairRenderer->Render(windowWidth, windowHeight);
         if (m_hudRenderer && m_hotbarRenderer) {
             m_hudRenderer->begin(windowWidth, windowHeight);
             m_hotbarRenderer->Render(*m_hudRenderer, m_hotbar, windowWidth, windowHeight);
+            if (m_screen == GameScreen::Inventory) {
+                MenuContext ctx = makeMenuContext(windowWidth, windowHeight);
+                m_hotbarRenderer->RenderInventory(*m_hudRenderer, m_hotbar, ctx);
+            }
             m_hudRenderer->end();
         }
         return;
@@ -207,7 +219,9 @@ void Game::OnRightClick()
     if (m_ignoreMouseButtons || m_screen != GameScreen::Playing || !m_target.hit || !m_World || !m_Player)
         return;
 
-    const BlockId selected = m_hotbar.selectedBlock();
+    const BlockId selected = canonicalizePlaceable(m_hotbar.selectedBlock());
+    if (selected == BlockId::Air)
+        return;
     ChunkBlock toPlace(selected);
     if (selected == BlockId::Water)
         toPlace = Water::makeSource();
@@ -239,7 +253,7 @@ void Game::OnRightClick()
 
 void Game::OnScroll(float yoffset)
 {
-    if (m_screen == GameScreen::Playing) {
+    if (m_screen == GameScreen::Playing || m_screen == GameScreen::Inventory) {
         if (yoffset > 0.0f)
             m_hotbar.cycleSlot(-1);
         else if (yoffset < 0.0f)
@@ -261,6 +275,32 @@ void Game::OnChar(unsigned int codepoint)
 
 void Game::OnKey(int key, int action)
 {
+    if (key == GLFW_KEY_E && action == GLFW_PRESS) {
+        if (m_screen == GameScreen::Playing) {
+            m_screen = GameScreen::Inventory;
+            return;
+        }
+        if (m_screen == GameScreen::Inventory) {
+            resumePlay();
+            return;
+        }
+    }
+
+    if (m_screen == GameScreen::Inventory &&
+        (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        static const int slotKeys[Hotbar::SLOT_COUNT] = {
+            GLFW_KEY_1, GLFW_KEY_2, GLFW_KEY_3,
+            GLFW_KEY_4, GLFW_KEY_5, GLFW_KEY_6,
+            GLFW_KEY_7, GLFW_KEY_8, GLFW_KEY_9,
+        };
+        for (int i = 0; i < Hotbar::SLOT_COUNT; ++i) {
+            if (key == slotKeys[i]) {
+                m_hotbar.selectSlot(i);
+                return;
+            }
+        }
+    }
+
     if (m_screen == GameScreen::Playing)
         return;
     if (action != GLFW_PRESS && action != GLFW_REPEAT)
@@ -312,6 +352,9 @@ void Game::OnEscape()
     switch (m_screen) {
     case GameScreen::Playing:
         m_screen = GameScreen::Paused;
+        break;
+    case GameScreen::Inventory:
+        resumePlay();
         break;
     case GameScreen::Paused:
         resumePlay();
@@ -933,7 +976,8 @@ void Game::drawSettings(MenuContext& ctx)
     const float bh = btnH(ctx);
     const float g = gap(ctx);
     const float rowH = 28.0f * s;
-    const float panelH = 56.0f * s + 5.0f * (22.0f * s + rowH + g) + bh + 28.0f * s;
+    const float panelH = 56.0f * s + 3.0f * (20.0f * s + rowH + g)
+                       + 4.0f * (bh + g) + 12.0f * s;
     const float px = (ctx.width - panelW) * 0.5f;
     const float py = (ctx.height - panelH) * 0.5f;
 
@@ -994,6 +1038,9 @@ void Game::drawSettings(MenuContext& ctx)
         applyFullscreen();
         persistSettings();
     }
+    y += bh + g;
+    if (menuToggle(ctx, bx, y, bw, bh, "Sun / Moon", m_Config.showSunMoon))
+        persistSettings();
     y += bh + g;
     if (menuButton(ctx, bx, y, bw, bh, "Back")) {
         persistSettings();

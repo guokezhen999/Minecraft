@@ -19,6 +19,7 @@ struct Config
     int fov = 90;
     float mouseSensitivity = 0.10f;
     bool vsync = true;
+    bool showSunMoon = true;
     std::string lastWorld;
 };
 

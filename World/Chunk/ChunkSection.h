@@ -8,6 +8,7 @@
 #include "IChunk.h"
 #include "ChunkMesh.h"
 #include "../WorldConstants.h"
+#include "../Block/BlockData.h"
 
 #include <array>
 #include <cstdint>
@@ -64,6 +65,9 @@ private:
 
     ChunkBlock getAdjacentBlock(const World& world, int x, int y, int z) const;
     static bool shouldDrawFaceAgainst(const ChunkBlock& neighbor);
+
+    const BlockDataHolder& visualData(const World& world, int x, int z,
+                                      const ChunkBlock& block) const;
 
     void addXPositiveFace(const World& world, int x, int y, int z, const ChunkBlock& block);
     void addXNegativeFace(const World& world, int x, int y, int z, const ChunkBlock& block);

@@ -39,7 +39,8 @@ public:
     World& operator=(const World&) = delete;
 
     void Update(const glm::vec3& cameraPos);
-    void Render(RenderMaster& master, const Camera& camera, bool underwater = false);
+    void Render(RenderMaster& master, const Camera& camera, bool underwater,
+                const Atmosphere& atmosphere);
 
     // True if eyes are below the water surface in the current cell
     bool isCameraUnderwater(const glm::vec3& eyePos) const;
@@ -70,6 +71,8 @@ public:
     bool isCollidable(int worldX, int worldY, int worldZ) const;
 
     bool isChunkLoaded(int cx, int cz) const;
+
+    BiomeType getBiome(int worldX, int worldZ) const;
 
     // Terrain surface Y at column (same as generator; ignores player edits)
     int getSurfaceHeight(int worldX, int worldZ) const;

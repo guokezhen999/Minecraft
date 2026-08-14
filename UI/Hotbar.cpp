@@ -3,22 +3,22 @@
 //
 
 #include "Hotbar.h"
+#include "../World/Block/Grass.h"
 
 #include <algorithm>
 
 Hotbar::Hotbar()
 {
-    // Default placeable kit (inventory deferred — hotkeys only)
     m_slots = {
         BlockId::Grass,
-        BlockId::SavannaGrass,
-        BlockId::Sandstone,
-        BlockId::SpruceBark,
-        BlockId::JungleBark,
-        BlockId::Ice,
-        BlockId::Snow,
-        BlockId::TaigaGrass,
+        BlockId::Dirt,
+        BlockId::Stone,
+        BlockId::OakBark,
+        BlockId::Sand,
+        BlockId::Water,
         BlockId::Torch,
+        BlockId::TallGrass,
+        BlockId::Snow,
     };
 }
 
@@ -48,5 +48,5 @@ void Hotbar::setSlot(int index, BlockId id)
 {
     if (index < 0 || index >= SLOT_COUNT)
         return;
-    m_slots[index] = id;
+    m_slots[index] = canonicalizePlaceable(id);
 }

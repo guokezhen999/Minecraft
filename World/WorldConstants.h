@@ -129,9 +129,9 @@ constexpr int DAY_LENGTH = 24000;
 constexpr int TICKS_PER_SECOND = 20;
 constexpr int TICK_NOON = 6000;
 constexpr int TICK_MIDNIGHT = 18000;
-// Half-width of full day / full night. Remaining ticks are long dawn / dusk.
-constexpr int DAY_PLATEAU_HALF = 1500;
-constexpr int NIGHT_PLATEAU_HALF = 1500;
+// Half-width of full day / full night. Leftover ticks are dawn / dusk (~30s each).
+constexpr int DAY_PLATEAU_HALF = 4800;
+constexpr int NIGHT_PLATEAU_HALF = 4800;
 // ~5 min per full cycle (Minecraft is 20).
 constexpr float WORLD_TIME_SCALE = 4.0f;
 // Hold T to speed up the day cycle (1 = no extra, 5 = five times faster).
@@ -158,6 +158,7 @@ struct Atmosphere {
     glm::vec3 moonDir{0.0f, -1.0f, 0.0f};
     glm::vec3 moonColor{0.0f};
     glm::vec3 moonDiscColor{0.0f};
+    bool celestial = true;
 };
 
 #endif //MINECRAFT_WORLDCONSTANTS_H

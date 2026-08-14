@@ -380,6 +380,20 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
     }
 
     if (y == height) {
+        // Underwater floor is never grass (rivers, lakes, ocean shelf).
+        if (height < WATER_LEVEL) {
+            switch (biome) {
+                case BiomeType::Ocean:
+                case BiomeType::Desert:
+                    return static_cast<int>(BlockId::Sand);
+                case BiomeType::TemperateDesert:
+                    return (columnRoll(worldX, worldZ, 701u) < 0.6f) ?
+                           static_cast<int>(BlockId::Sand) : static_cast<int>(BlockId::Stone);
+                default:
+                    return static_cast<int>(BlockId::Dirt);
+            }
+        }
+
         switch (biome) {
             case BiomeType::Ocean:
             case BiomeType::Desert:
@@ -389,24 +403,20 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
                 return (columnRoll(worldX, worldZ, 701u) < 0.6f) ?
                        static_cast<int>(BlockId::Sand) : static_cast<int>(BlockId::Stone);
             case BiomeType::Savanna:
-                return static_cast<int>(BlockId::SavannaGrass);
+                return static_cast<int>(BlockId::Grass);
             case BiomeType::Tundra: {
                 // Moss carpet with leftover snow and frost-shattered stone.
                 const float r = columnRoll(worldX, worldZ, 702u);
                 if (r < 0.60f)
-                    return static_cast<int>(BlockId::TundraGrass);
-                if (r < 0.85f) {
-                    // Snow patches stay above the water line; riverbeds use moss.
-                    if (height < WATER_LEVEL)
-                        return static_cast<int>(BlockId::TundraGrass);
+                    return static_cast<int>(BlockId::Grass);
+                if (r < 0.85f)
                     return static_cast<int>(BlockId::Snow);
-                }
                 return static_cast<int>(BlockId::Stone);
             }
             case BiomeType::SnowyPlains:
                 return static_cast<int>(BlockId::Snow);
             case BiomeType::Taiga:
-                return static_cast<int>(BlockId::TaigaGrass);
+                return static_cast<int>(BlockId::Grass);
             case BiomeType::Forest:
             case BiomeType::Grassland:
             case BiomeType::Jungle:
@@ -453,9 +463,9 @@ bool TerrainGenerator::shouldPlaceTree(int worldX, int worldZ,
     if (col.biome == BiomeType::Forest && surface == static_cast<int>(BlockId::Grass))
         base = 1.0f / 18.0f;
     else if (col.biome == BiomeType::Savanna
-             && surface == static_cast<int>(BlockId::SavannaGrass))
+             && surface == static_cast<int>(BlockId::Grass))
         base = 1.0f / 90.0f;
-    else if (col.biome == BiomeType::Taiga && surface == static_cast<int>(BlockId::TaigaGrass))
+    else if (col.biome == BiomeType::Taiga && surface == static_cast<int>(BlockId::Grass))
         base = 1.0f / 15.0f;
     else if (col.biome == BiomeType::Jungle && surface == static_cast<int>(BlockId::Grass))
         base = 1.0f / 22.0f;

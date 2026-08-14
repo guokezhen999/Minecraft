@@ -43,9 +43,7 @@ static float smoothstepRange(float edge0, float edge1, float x) {
 }
 
 static bool isColdBiome(BiomeType biome) {
-    return biome == BiomeType::Tundra
-        || biome == BiomeType::Taiga
-        || biome == BiomeType::SnowyPlains;
+    return biome == BiomeType::SnowyPlains;
 }
 
 float TerrainGenerator::valueNoise(float x, float z) const {
@@ -373,7 +371,7 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
                                int height, BiomeType biome) const {
     if (y > height) {
         if (y <= WATER_LEVEL) {
-            // Cold biomes: only the top water cell becomes ice
+            // Snowy plains: only the top water cell becomes ice
             if (isColdBiome(biome) && y == WATER_LEVEL)
                 return static_cast<int>(BlockId::Ice);
             return static_cast<int>(BlockId::Water);
@@ -392,7 +390,19 @@ int TerrainGenerator::getBlock(int worldX, int y, int worldZ,
                        static_cast<int>(BlockId::Sand) : static_cast<int>(BlockId::Stone);
             case BiomeType::Savanna:
                 return static_cast<int>(BlockId::SavannaGrass);
-            case BiomeType::Tundra:
+            case BiomeType::Tundra: {
+                // Moss carpet with leftover snow and frost-shattered stone.
+                const float r = columnRoll(worldX, worldZ, 702u);
+                if (r < 0.60f)
+                    return static_cast<int>(BlockId::TundraGrass);
+                if (r < 0.85f) {
+                    // Snow patches stay above the water line; riverbeds use moss.
+                    if (height < WATER_LEVEL)
+                        return static_cast<int>(BlockId::TundraGrass);
+                    return static_cast<int>(BlockId::Snow);
+                }
+                return static_cast<int>(BlockId::Stone);
+            }
             case BiomeType::SnowyPlains:
                 return static_cast<int>(BlockId::Snow);
             case BiomeType::Taiga:

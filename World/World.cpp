@@ -799,9 +799,14 @@ void World::placeDecorations(Chunk& chunk, int cx, int cz,
                 continue;
             }
 
-            // Tundra: sparse Dead Shrubs
-            if (biome == BiomeType::Tundra && surface == BlockId::Snow) {
-                if (m_generator.columnRoll(wx, wz, 611u) < (1.0f / 40.0f) * wet) {
+            // Tundra: sedge/moss tufts on TundraGrass; dwarf shrubs on moss or leftover snow
+            if (biome == BiomeType::Tundra &&
+                (surface == BlockId::TundraGrass || surface == BlockId::Snow)) {
+                if (surface == BlockId::TundraGrass &&
+                    m_generator.columnRoll(wx, wz, 660u) < (1.0f / 14.0f) * wet) {
+                    setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
+                                       BlockId::Fern);
+                } else if (m_generator.columnRoll(wx, wz, 661u) < (1.0f / 40.0f) * wet) {
                     setDecorationBlock(chunk, cx, cz, wx, surfY + 1, wz,
                                        BlockId::DeadShrub);
                 }

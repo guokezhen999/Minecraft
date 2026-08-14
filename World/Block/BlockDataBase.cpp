@@ -34,6 +34,7 @@ BlockDatabase::BlockDatabase()
     m_blocks[(int)BlockId::JungleLeaf] = std::make_unique<DefaultBlock>("jungleLeaf");
     m_blocks[(int)BlockId::Fern] = std::make_unique<DefaultBlock>("fern");
     m_blocks[(int)BlockId::TaigaGrass] = std::make_unique<DefaultBlock>("taigaGrass");
+    m_blocks[(int)BlockId::TundraGrass] = std::make_unique<DefaultBlock>("tundraGrass");
 
     atlas = TextureAtlas("/defaultPack");
 }

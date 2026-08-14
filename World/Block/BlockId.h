@@ -37,6 +37,7 @@ enum class BlockId : Block_t {
     JungleLeaf,
     Fern,
     TaigaGrass,
+    TundraGrass,
 
     NUM_TYPES
 };
